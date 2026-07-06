@@ -1,0 +1,110 @@
+meta:
+  id: iolink_v11_standard
+  name: IO-Link Standard Definitions
+  specification: "1.1"
+
+# Tutti i formati usano bitstruct. 
+# La lunghezza in byte viene dedotta via codice con bitstruct.calcsize(format) // 8
+registers:
+  # --- IDENTIFICAZIONE (Accesso: R) ---
+  vendor_name:
+    index: 16
+    format: "t512" # 64 byte
+    fields: ["value"]
+    access: r
+
+  vendor_text:
+    index: 17
+    format: "t512" # 64 byte
+    fields: ["value"]
+    access: r
+
+  product_name:
+    index: 18
+    format: "t512" # 64 byte
+    fields: ["value"]
+    access: r
+
+  product_id:
+    index: 19
+    format: "t512" # 64 byte
+    fields: ["value"]
+    access: r
+
+  product_text:
+    index: 20
+    format: "t512" # 64 byte
+    fields: ["value"]
+    access: r
+
+  serial_number:
+    index: 21
+    format: "t128" # 16 byte
+    fields: ["value"]
+    access: r
+
+  hw_revision:
+    index: 22
+    format: "t512" # 64 byte
+    fields: ["value"]
+    access: r
+
+  fw_revision:
+    index: 23
+    format: "t512" # 64 byte
+    fields: ["value"]
+    access: r
+
+  application_specific_tag:
+    index: 24
+    format: "t256" # 32 byte
+    fields: ["value"]
+    access: rw
+
+  # --- STATO E LOCKS ---
+  
+  # Index 12: Device Access Locks (2 byte)
+  # Padding di 12 bit + 4 flag booleani
+  device_access_locks:
+    index: 12
+    format: "p12b1b1b1b1"
+    fields:
+      - local_user_interface_lock: {0: "UNLOCKED", 1: "LOCKED"}
+      - local_parameterization_lock: {0: "UNLOCKED", 1: "LOCKED"}
+      - data_storage_lock: {0: "UNLOCKED", 1: "LOCKED"}
+      - parameter_write_lock: {0: "UNLOCKED", 1: "LOCKED"}
+    access: rw
+
+  # Index 36: Device Status (1 byte)
+  device_status:
+    index: 36
+    format: "u8"
+    fields:
+      - status:
+          0: "OK"
+          1: "Maintenance required"
+          2: "Out of specification"
+          3: "Functional check"
+          4: "Failure"
+    access: r
+
+  # Index 37: Detailed Device Status (Array di 3 byte * 8 eventi = 24 byte)
+  # Nota: spesso gestito come raw se non si scompone ogni evento
+  detailed_device_status:
+    index: 37
+    format: "r192" 
+    fields: ["raw_events"]
+    access: r
+
+  # Index 2: System Command (write-only, 1 byte)
+  system_command:
+    index: 2
+    subindex: 0
+    format: "u8"
+    access: w
+
+# Comandi di sistema universali (Index 2)
+system_commands:
+  device_reset: 128
+  application_reset: 129
+  restore_factory: 130

@@ -1,0 +1,331 @@
+meta:
+  id: pf2m7
+  vendor: SMC
+  profile: digital_flow_switch
+
+pd:
+  frame_type: "4.0"
+  in:
+    fields:
+      - typeprefix: s
+        length: 16
+        name: pd_raw_s16
+      - typeprefix: b
+        length: 1
+        name: error_diag
+      - typeprefix: b
+        length: 1
+        name: fixed_output
+      - typeprefix: p
+        length: 5
+        name: _pad1
+      - typeprefix: b
+        length: 1
+        name: meas_diag
+      - typeprefix: p
+        length: 6
+        name: _pad2
+      - typeprefix: b
+        length: 1
+        name: out2
+      - typeprefix: b
+        length: 1
+        name: out1
+
+system_commands:
+  zero_clear: 160
+  reset_peak_bottom: 170
+  reset_accumulated: 190
+
+
+registers:
+  # --- Unit / scaling (read from device, preferred over hard-coded table) ---
+  display_unit:
+    index: 1000
+    subindex: 0
+    format: "u8"
+    access: rw
+
+  gradient_a:
+    index: 8000
+    subindex: 0
+    format: "<f32"
+    access: r
+
+  gradient_b:
+    index: 8010
+    subindex: 0
+    format: "<f32"
+    access: r
+
+  # --- OUT1 mode / output type (index 1210) ---
+  out1_mode:
+    index: 1210
+    subindex: 1
+    format: "u8"
+    access: rw
+
+  out1_output_type:
+    index: 1210
+    subindex: 2
+    format: "u8"
+    access: rw
+
+  # --- OUT1 threshold settings (index 1220) ---
+  out1_hys_sp:
+    index: 1220
+    subindex: 1
+    format: "s16"
+    access: rw
+
+  out1_hys_band:
+    index: 1220
+    subindex: 2
+    format: "s16"
+    access: rw
+
+  out1_win_lo:
+    index: 1220
+    subindex: 3
+    format: "s16"
+    access: rw
+
+  out1_win_hi:
+    index: 1220
+    subindex: 4
+    format: "s16"
+    access: rw
+
+  out1_win_hys:
+    index: 1220
+    subindex: 5
+    format: "s16"
+    access: rw
+
+  out1_delay:
+    index: 1220
+    subindex: 6
+    format: "s16"
+    access: rw
+
+  # --- OUT1 accumulated output L (index 1300) ---
+  out1_accum_sp_l:
+    index: 1300
+    subindex: 1
+    format: "s16"
+    access: rw
+
+  out1_accum_idx_l:
+    index: 1300
+    subindex: 2
+    format: "s16"
+    access: rw
+
+  # --- OUT1 accumulated output ft3 (index 1310) ---
+  out1_accum_sp_ft3:
+    index: 1310
+    subindex: 1
+    format: "s16"
+    access: rw
+
+  out1_accum_idx_ft3:
+    index: 1310
+    subindex: 2
+    format: "s16"
+    access: rw
+
+  # --- OUT2 mode / output type (index 1410) ---
+  out2_mode:
+    index: 1410
+    subindex: 1
+    format: "u8"
+    access: rw
+
+  out2_output_type:
+    index: 1410
+    subindex: 2
+    format: "u8"
+    access: rw
+
+  # --- OUT2 threshold settings (index 1420) ---
+  out2_hys_sp:
+    index: 1420
+    subindex: 1
+    format: "s16"
+    access: rw
+
+  out2_hys_band:
+    index: 1420
+    subindex: 2
+    format: "s16"
+    access: rw
+
+  out2_win_lo:
+    index: 1420
+    subindex: 3
+    format: "s16"
+    access: rw
+
+  out2_win_hi:
+    index: 1420
+    subindex: 4
+    format: "s16"
+    access: rw
+
+  out2_win_hys:
+    index: 1420
+    subindex: 5
+    format: "s16"
+    access: rw
+
+  out2_delay:
+    index: 1420
+    subindex: 6
+    format: "s16"
+    access: rw
+
+  # --- OUT2 accumulated output L (index 1500) ---
+  out2_accum_sp_l:
+    index: 1500
+    subindex: 1
+    format: "s16"
+    access: rw
+
+  out2_accum_idx_l:
+    index: 1500
+    subindex: 2
+    format: "s16"
+    access: rw
+
+  # --- OUT2 accumulated output ft3 (index 1510) ---
+  out2_accum_sp_ft3:
+    index: 1510
+    subindex: 1
+    format: "s16"
+    access: rw
+
+  out2_accum_idx_ft3:
+    index: 1510
+    subindex: 2
+    format: "s16"
+    access: rw
+
+  # --- Accumulated flow / filtering / display ---
+  accum_direction:
+    index: 1600
+    subindex: 0
+    format: "u8"
+    access: rw
+
+  digital_filter:
+    index: 1800
+    subindex: 0
+    format: "u8"
+    access: rw
+
+  display_mode:
+    index: 2000
+    subindex: 0
+    format: "u8"
+    access: rw
+
+  display_resolution:
+    index: 2010
+    subindex: 0
+    format: "u8"
+    access: rw
+
+  reversed_display:
+    index: 2020
+    subindex: 0
+    format: "u8"
+    access: rw
+
+  zero_cutoff:
+    index: 2030
+    subindex: 0
+    format: "u8"
+    access: rw
+
+  accum_hold:
+    index: 2200
+    subindex: 0
+    format: "u8"
+    access: rw
+
+  display_off_mode:
+    index: 2400
+    subindex: 0
+    format: "u8"
+    access: rw
+
+  # --- Hardware / fluid configuration ---
+  npn_pnp:
+    index: 1020
+    subindex: 0
+    format: "u8"
+    access: rw
+
+  ext_input_type:
+    index: 1030
+    subindex: 0
+    format: "u8"
+    access: rw
+
+  fluid:
+    index: 1060
+    subindex: 0
+    format: "u8"
+    access: rw
+
+  normal_condition:
+    index: 1070
+    subindex: 0
+    format: "u8"
+    access: rw
+
+  display_color:
+    index: 1010
+    subindex: 0
+    format: "u8"
+    access: rw
+
+  ext_input_behavior:
+    index: 2040
+    subindex: 0
+    format: "u8"
+    access: rw
+
+  # --- Analogue output ---
+  analogue_voltage_output:
+    index: 2100
+    subindex: 0
+    format: "u8"
+    access: rw
+
+  # --- Diagnostics / status ---
+  flow_peak:
+    index: 8020
+    subindex: 1
+    format: "s16"
+    access: r
+
+  flow_bottom:
+    index: 8030
+    subindex: 1
+    format: "s16"
+    access: r
+
+  accum_value:
+    index: 8040
+    subindex: 1
+    format: "s16"
+    access: r
+
+  accum_value_idx:
+    index: 8040
+    subindex: 2
+    format: "s16"
+    access: r
+
+

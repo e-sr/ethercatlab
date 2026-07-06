@@ -1,0 +1,38 @@
+[project]
+name = "ethercat_lab"
+version = "0.1.0"
+description = "EtherCAT bench control"
+authors = [
+    {name = "esr", email = "enzo@esrdev.ch"},
+]
+dependencies = [
+    "pydantic>=2.8.0",
+    "PyYAML>=6.0.2",
+    "typer>=0.12.3",
+    "pytest>=9.0.3",
+    "bitstruct>=8.22.1",
+    "ipython>=9.14.0",
+    "rich>=15.0.0",
+]
+requires-python = "==3.13.*"
+readme = "readme.md"
+license = {text = "MIT"}
+
+[project.scripts]
+eci = "ethercat_lab.cli:app"
+
+[tool.pdm]
+distribution = true
+
+[tool.pdm.build]
+package-dir = "src"
+
+
+[tool.pdm.dev-dependencies]
+dev = [
+    "-e file:///${PROJECT_ROOT}/../pysoem#egg=pysoem",
+]
+[dependency-groups]
+test = [
+    "pytest>=9.0.3",
+]

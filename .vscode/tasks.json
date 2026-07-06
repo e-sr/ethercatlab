@@ -1,0 +1,20 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Esegui Test EtherCAT (Hardware)",
+            "type": "shell",
+            "command": "sudo ${workspaceFolder}/.venv/bin/pytest -m hw -rs",
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": true,
+                "panel": "shared"
+            },
+            "group": {
+                "kind": "test",
+                "isDefault": true
+            },
+        }
+    ]
+}

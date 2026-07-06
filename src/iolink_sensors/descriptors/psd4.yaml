@@ -1,0 +1,53 @@
+meta:
+  id: psd4
+  vendor: WIKA
+  profile: pressure_switch
+
+pd:
+  frame_type: "2.2"
+  in:
+    fields:
+      - typeprefix: s
+        length: 14
+        name: process_value_raw14
+      - typeprefix: b
+        length: 1
+        name: ou2
+      - typeprefix: b
+        length: 1
+        name: ou1
+
+system_commands:
+  reset_high_pressure: 160
+  reset_low_pressure: 161
+  reset_overload_counter: 162
+  reset_high_temperature: 163
+  reset_low_temperature: 164
+  adjust_zero_point: 165
+
+registers:
+  unit_process_data:
+    index: 66
+    subindex: 0
+    format: "u8"
+    access: rw
+  gradient:
+    index: 67
+    subindex: 0
+    format: "<f32"
+    access: r
+  range_start:
+    index: 68
+    subindex: 0
+    format: "s16"
+    access: r
+  range_end:
+    index: 69
+    subindex: 0
+    format: "s16"
+    access: r
+  sensor_status:
+    index: 123
+    subindex: 0
+    format: "u8"
+    access: r
