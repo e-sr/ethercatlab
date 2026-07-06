@@ -28,11 +28,10 @@ distribution = true
 package-dir = "src"
 
 
-[tool.pdm.dev-dependencies]
-dev = [
-    "-e file:///${PROJECT_ROOT}/../pysoem#egg=pysoem",
-]
 [dependency-groups]
+dev = [
+    "-e file:///${PROJECT_ROOT}/vendor/pysoem#egg=pysoem",
+]
 test = [
     "pytest>=9.0.3",
 ]
