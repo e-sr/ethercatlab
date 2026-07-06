@@ -2,25 +2,63 @@
 
 Libreria Python e REPL interattivo per il controllo e il debug di bus EtherCAT su banco prova Beckhoff.
 
-Il progetto espone un wrapper su [pysoem](https://github.com/bnjmorgan/pysoem) con supporto CoE/AoE, mapping PDO tipizzato e driver per terminali EL6224 (IO-Link) ed EL3072 (ingressi analogici), più descrittori IO-Link per sensori industriali.
+Il progetto espone un wrapper su [pysoem](https://github.com/e-sr/pysoem) (fork con supporto AoE) con mapping PDO tipizzato e driver per terminali EL6224 (IO-Link) ed EL3072 (ingressi analogici), più descrittori IO-Link per sensori industriali.
 
 ## Requisiti
 
 - Python 3.13
 - [PDM](https://pdm-project.org/) per la gestione delle dipendenze
-- [pysoem](https://github.com/bnjmorgan/pysoem) — installato come dipendenza di sviluppo dal repo sibling `../pysoem`
+- Toolchain C (`gcc`, header Python) per compilare pysoem
 - Interfaccia di rete EtherCAT (es. `enp2s0`) con master IgH o stack compatibile
 - Permessi sufficienti per aprire l'interfaccia raw (spesso `sudo` o capability `CAP_NET_RAW`)
 
 ## Installazione
 
-```bash
-git clone <repo-url> ethercatlab
-cd ethercatlab
-pdm install
+Il binding EtherCAT [pysoem](https://github.com/e-sr/pysoem) è incluso come **git submodule** in `vendor/pysoem` (con submodule annidato `soem/` → [e-sr/soem](https://github.com/e-sr/soem)).
+
+La dipendenza è dichiarata in `pyproject.toml` come editable install dal path locale:
+
+```toml
+[dependency-groups]
+dev = ["-e file:///${PROJECT_ROOT}/vendor/pysoem#egg=pysoem"]
 ```
 
-Assicurati che il checkout di `pysoem` sia disponibile in `../pysoem` rispetto alla root del progetto, oppure aggiorna il path in `pyproject.toml` sotto `[tool.pdm.dev-dependencies]`.
+Serve il gruppo `dev` (`pdm install -G dev`): pysoem non è nelle dipendenze runtime del pacchetto.
+
+```bash
+git clone --recurse-submodules git@github.com:e-sr/ethercatlab.git
+cd ethercatlab
+pdm install -G dev
+```
+
+Se hai già clonato senza submodule:
+
+```bash
+git submodule update --init --recursive
+pdm install -G dev
+```
+
+Verifica che pysoem punti al checkout locale:
+
+```bash
+pdm run python -c "import pysoem; print(pysoem.__file__)"
+# → .../ethercatlab/vendor/pysoem/...
+```
+
+### Aggiornare pysoem
+
+Commit attualmente pinato nel repo: `1c58402` ([vendor/pysoem](vendor/pysoem)).
+
+```bash
+cd vendor/pysoem
+git fetch origin
+git checkout <commit>
+git submodule update --init --recursive
+cd ../..
+git add vendor/pysoem
+git commit -m "Bump pysoem to <commit>"
+pdm install -G dev
+```
 
 ## Avvio rapido
 
@@ -62,6 +100,10 @@ Valori numerici accettano notazione decimale o esadecimale (`0x1A00`).
 ## Struttura del progetto
 
 ```
+vendor/
+└── pysoem/                # submodule → github.com/e-sr/pysoem
+    └── soem/              # submodule annidato (SOEM C library)
+
 src/
 ├── ethercat_lab/
 │   ├── master.py          # Master EtherCAT: stati AL, CoE, AoE, ciclo PDO
@@ -158,6 +200,8 @@ blink_and_print(banco, sample_period=0.1)
 ```
 
 ## Test
+
+Richiede `pdm install -G dev` (pysoem).
 
 Test offline (senza hardware):
 
