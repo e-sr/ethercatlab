@@ -1,3 +1,3 @@
 [submodule "vendor/pysoem"]
 	path = vendor/pysoem
-	url = https://github.com/e-sr/pysoem.git
+	url = git@github.com:e-sr/pysoem.git
