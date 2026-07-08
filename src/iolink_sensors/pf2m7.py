@@ -25,8 +25,8 @@ _DISPLAY_UNIT: dict[int, str] = {
 @dataclass(frozen=True, slots=True)
 class Pf2m7IsduSetup:
     """Optional ISDU writes before profile read. ``None`` = leave device unchanged."""
-
     display_unit: int | None = None
+    flow_range_l: int | None = None
 
 
 @dataclass(frozen=True)
@@ -43,21 +43,13 @@ class Pf2m7Device(DeviceBase):
         self,
         *,
         setup: Pf2m7IsduSetup | None = None,
-        flow_range_l: int | None = 25,
     ) -> None:
         super().__init__(self.DESCRIPTOR)
         self._setup = setup or Pf2m7IsduSetup()
-        self._flow_range_l = flow_range_l
-        self._scaling = _FLOW_SCALING_TABLE.get(flow_range_l, 0.006250) if flow_range_l else 0.006250
+        self._flow_range_l = self._setup.flow_range_l
+        self._scaling = _FLOW_SCALING_TABLE.get(self._flow_range_l, 0.006250) if self._flow_range_l else 0.006250
         self._offset = 0.0
-        self._unit = "L/min"
-        if self.pd_in_layout is None:
-            raise ValueError("pd_in_layout is None")
-
-    def isdu_writes(self) -> dict[str, Any]:
-        if self._setup.display_unit is None:
-            return {}
-        return {"display_unit": self._setup.display_unit}
+        self._unit = _DISPLAY_UNIT.get(self._setup.display_unit, f"code:{self._setup.display_unit}") if self._setup.display_unit else "L/min"
 
     def load_isdu_profile(
         self, port: IsduPort, *, vendor: str, product: str,

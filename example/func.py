@@ -19,8 +19,8 @@ from typing import TYPE_CHECKING, Generator
 from ethercat_lab import IOLinkIsduChannel
 from ethercat_lab.el6224 import IoLinkChannelConfig, EL6224,decode_port_status_byte
 from iolink_sensors.models import DeviceBase
-from iolink_sensors.pf2m7 import Pf2m7Device, Pf2m7Sample
-from iolink_sensors.psd4 import Psd4Device, Psd4Sample
+from iolink_sensors.pf2m7 import Pf2m7Device, Pf2m7Sample, Pf2m7IsduSetup
+from iolink_sensors.psd4 import Psd4Device, Psd4Sample, Psd4IsduSetup
 from ethercat_lab.el3072 import EL3072, AnalogInputChannel, InputInterface, PdoMode, UserScaleConfig, LimitConfig, RangeErrorConfig, IIRFilter, LimitTriggerType
 from collections.abc import Generator
 from ethercat_lab.pdo import PdoMapEntry, PdoMapping
@@ -52,7 +52,8 @@ class BancoLayout:
     el6224: int = 3
     el2004: int = 4
     el3072: int = 5
-    #psd4_port: int = 1
+    psd4_port_1: int = 2
+    psd4_port_2: int = 3
     pf2m7_port: int = 1
     pf2m7_flow_range_l: int = 25
 
@@ -114,7 +115,8 @@ class EL3072Sample:
 class PdoSnapshot:
     el1004: EL1004Sample
     el3072: EL3072Sample
-    #psd4: dict[str, Any]
+    psd4_1: Psd4Sample
+    psd4_2: Psd4Sample
     pf2m7: Pf2m7Sample
 
 class Banco:
@@ -125,13 +127,16 @@ class Banco:
         self.io_link = EL6224(master, self.layout.el6224)
         self.ai = EL3072(master, self.layout.el3072)
 
-        #self.psd4 = Psd4Device()
-        self.pf2m7 = Pf2m7Device(flow_range_l=self.layout.pf2m7_flow_range_l)
+        self.psd4_1 = Psd4Device(setup=Psd4IsduSetup())
+        self.psd4_2 = Psd4Device(setup=Psd4IsduSetup())
+        self.pf2m7 = Pf2m7Device(setup=Pf2m7IsduSetup())
 
-        # self.psd4_port = self.io_link.add_channel(
-        #     IOLinkChannelConfig.from_device(self.layout.psd4_port, self.psd4, sio=False),
-        #     device=self.psd4,
-        # )
+        self.io_link.set_channel(
+            IoLinkChannelConfig(port=self.layout.psd4_port_1, pd_in=self.psd4_1.pd_in_layout),
+        )
+        self.io_link.set_channel(
+            IoLinkChannelConfig(port=self.layout.psd4_port_2, pd_in=self.psd4_2.pd_in_layout),
+        )
         self.io_link.set_channel(
             IoLinkChannelConfig(port=self.layout.pf2m7_port, pd_in=self.pf2m7.pd_in_layout),
         )
@@ -172,7 +177,6 @@ class Banco:
         el1004_raw = self.bus.pdoin(self.layout.el1004)
         ai_named = self.ai.decode_tx_pdo_named(el3072_raw)
         iolink_ports = self.io_link.decode_tx_pdo_named(el6224_raw)
-        pf2m7_sample = self.pf2m7.sample(**iolink_ports["ch1_iolink_pd"])
         
         return PdoSnapshot(
             el1004=EL1004Sample.from_bytes(el1004_raw),
@@ -180,7 +184,9 @@ class Banco:
                 v1=float(ai_named["ch2_DEFAULT_REAL32"]["value_f32"]),
                 i2=float(ai_named["ch1_COMPACT_REAL32"]["value_f32"]),
             ),
-            pf2m7=pf2m7_sample,
+            pf2m7=self.pf2m7.sample(**iolink_ports["ch1_iolink_pd"]),
+            psd4_1=self.psd4_1.sample(**iolink_ports["ch2_iolink_pd"]),
+            psd4_2=self.psd4_2.sample(**iolink_ports["ch3_iolink_pd"]),
         )
 
     def read_pdo_safeop(self, *,repeats: int = 1, sample_period: float = 0.0) -> PdoSnapshot:
