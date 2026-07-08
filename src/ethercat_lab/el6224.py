@@ -20,7 +20,7 @@ import pysoem
 from iolink_sensors.models import DeviceBase, PdWireLayout, SensorDescriptor
 
 from .beckhoff_device import BeckhoffDevice
-from .master import CoeTransfer
+from .master import CoeTransfer, MasterState
 from .pdo import PdoMapEntry, PdoMapping, TxPdoAssignment, RxPdoAssignment
 
 from .aoe import (
@@ -401,15 +401,20 @@ class IOLinkIsduChannel:
         self.port = port
         self.iolink_channel = self._iolinkmaster._channels[port]
 
+    def _check_master_state(self) -> None:
+        if self._iolinkmaster._bus.get_slave(self._iolinkmaster.slave_idx).state != MasterState.SAFEOP:
+            raise RuntimeError("Master is not in SAFE-OP state")
+
     def read_isdu(
         self,
         index: int,
         subindex: int = 0,
         *,
         size: int | None = None,
-        retries: int = 8,
+        retries: int = 2,
         retry_delay_s: float = 0.1,
     ) -> bytes:
+        self._check_master_state()
         n = size if size is not None else _ISDU_SIZE.get(index, 64)
         off, ams = iolink_index_offset(index, subindex), iolink_ams_port(self.port)
         last_exc: BaseException | None = None
@@ -429,6 +434,7 @@ class IOLinkIsduChannel:
         _isdu_err(last_exc, off, ams, write=False, nbytes=n)  # type: ignore[arg-type]
 
     def write_isdu(self, index: int, data: bytes, subindex: int = 0) -> None:
+        self._check_master_state()
         off, ams = iolink_index_offset(index, subindex), iolink_ams_port(self.port)
         try:
             self._iolinkmaster._bus.aoe_write(self._iolinkmaster.slave_idx, INDEX_GROUP_COE, off, data, ams)
