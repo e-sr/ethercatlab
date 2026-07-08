@@ -315,16 +315,10 @@ class EL6224(BeckhoffDevice):
         decoded = super().decode_tx_pdo_named(raw)
         if parse_iolink:
             for cfg in self.channels:
+                if cfg.pd_in is None:
+                    continue
                 decoded[cfg.pd_field_name] = cfg.pd_in.decode_named(decoded[cfg.pd_field_name]["raw"])
         return decoded
-
-    def decode_tx_pdo(self, raw: bytes,parse_iolink: bool = True) -> dict[str, Any]:
-        decoded = super().decode_tx_pdo(raw)
-        if parse_iolink:
-            for cfg in self.channels:
-                decoded[cfg.pd_field_name] = cfg.pd_in.decode(decoded[cfg.pd_field_name]["raw"])
-        return decoded
-
 
 def _isdu_err(exc, offset: int, ams_port: int, *, write: bool, nbytes: int) -> NoReturn:
     idx, sub = (offset >> 16) & 0xFFFF, offset & 0xFF

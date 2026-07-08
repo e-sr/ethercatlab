@@ -115,11 +115,6 @@ def apply_sensors(
     return profiles
 
 
-def probe_sensors(*args, **kwargs) -> dict[int, SensorIsduProfile]:
-    """Alias retrocompatibile."""
-    return apply_sensors(*args, **kwargs)
-
-
 def read_sensors(
     master: Master,
     iolink: EL6224,

@@ -43,6 +43,11 @@ class BeckhoffDevice:
             raise RuntimeError("no tx PDO assignment configured")
         return self._tx_assignment.decode_named(raw)
 
+    def decode_tx_pdo(self, raw: bytes) -> tuple[Any, ...] | None:
+        if self._tx_assignment is None:
+            raise RuntimeError("no tx PDO assignment configured")
+        return self._tx_assignment.decode(raw)
+
     def expected_tx_pdo_byte_len(self) -> int:
         if self._tx_assignment is None:
             return 0
