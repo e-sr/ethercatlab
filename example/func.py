@@ -14,7 +14,7 @@ import math
 import time
 from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Generator
+from typing import TYPE_CHECKING, Generator, Callable
 
 from ethercat_lab import IOLinkIsduChannel
 from ethercat_lab.el6224 import IoLinkChannelConfig, EL6224,decode_port_status_byte
@@ -273,7 +273,7 @@ def _bool_indicators(values: Sequence[bool | None], *, on: str, off: str) -> Tex
     return t
 
 
-def _format_pdo_line(snapshot: PdoSnapshot, do: EL2004Sample) -> Text:
+def format_pdo_line(snapshot: PdoSnapshot, do: EL2004Sample) -> Text:
     di = snapshot.el1004
     #psd4 = snapshot.psd4
     pf2m7_sample = snapshot.pf2m7
@@ -289,14 +289,20 @@ def _format_pdo_line(snapshot: PdoSnapshot, do: EL2004Sample) -> Text:
     line.append(f"  PF2M7 {pf2m7_sample.value:6.3f} {pf2m7_sample.unit}", style="bright_blue")
     return line
 
-
-def _format_status_line(snapshot: PdoSnapshot, do: EL2004Sample, stats_str: str) -> Text:
-    line = _format_pdo_line(snapshot, do)
-    line.append(f" {stats_str}", style="dim")
+def basic_iolinksensors_pdo_line(snapshot: PdoSnapshot, do: EL2004Sample) -> Text:
+    psd4_1_sample = snapshot.psd4_1
+    psd4_2_sample = snapshot.psd4_2
+    pf2m7_sample = snapshot.pf2m7
+    line = Text()
+    line.append(f"  PSD4_1 {psd4_1_sample.value:6.3f} {psd4_1_sample.unit}", style="bright_blue")
+    line.append(f"  PSD4_2 {psd4_2_sample.value:6.3f} {psd4_2_sample.unit}", style="bright_blue")
+    line.append(f"  PF2M7 {pf2m7_sample.value:6.3f} {pf2m7_sample.unit}", style="bright_blue")
     return line
 
-
-def blink_and_print(banco: Banco, sample_period: float = 0.1) -> None:
+def blink_and_print(banco: Banco, 
+sample_period: float,
+_line_formatter: Callable[[PdoSnapshot, EL2004Sample], Text], 
+_timing: bool = False) -> None:
     gen = banco.exchange_pdo_op(sample_period)
 
     doON = EL2004Sample.from_hex(0x0F)
@@ -352,7 +358,10 @@ def blink_and_print(banco: Banco, sample_period: float = 0.1) -> None:
                         f"| Live Stats (ms) -> Avg: {mean:.2f} | StdDev: {std_dev:.2f} "
                         f"| Min: {min_val:.2f} | Max: {max_val:.2f}"
                     )
-                    live.update(_format_status_line(snapshot, current_out, stats_str))
+                    line = _line_formatter(snapshot, current_out)
+                    if _timing:
+                        line.append(f" {stats_str}", style="dim")
+                    live.update(line)
 
                 current_out = doOFF if current_out == doON else doON
 
