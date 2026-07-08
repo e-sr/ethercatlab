@@ -51,9 +51,28 @@ def _require_writable(reg: RegisterSpec, name: str) -> None:
         raise ValueError(f"Register {name!r} is {reg.access!r}, cannot write")
 
 
-def read_register(port: IsduPort, descriptor: SensorDescriptor, name: str) -> bytes:
+def read_register(
+    port: IsduPort, descriptor: SensorDescriptor, name: str, *, size: int | None = None,
+) -> bytes:
     reg = descriptor.registers[name]
-    return port.read_isdu(reg.index, reg.subindex, size=register_byte_size(reg))
+    n = register_byte_size(reg) if size is None else size
+    return port.read_isdu(reg.index, reg.subindex, size=n)
+
+
+def read_text_register(
+    port: IsduPort,
+    descriptor: SensorDescriptor,
+    name: str,
+    *,
+    max_bytes: int = 32,
+) -> str:
+    """Read IO-Link string register; cap length for EL6224 single ISDU frame."""
+    reg = descriptor.registers[name]
+    if not reg.format.startswith("t"):
+        raise ValueError(f"{name!r} is not a text register")
+    n = min(register_byte_size(reg), max_bytes)
+    raw = read_register(port, descriptor, name, size=n)
+    return decode_register_value(reg, raw.ljust(register_byte_size(reg), b"\x00"))
 
 
 def decode_register_value(reg: RegisterSpec, raw: bytes) -> Any:
@@ -104,10 +123,16 @@ def apply_isdu_writes(
         write_decoded_register(port, descriptor, name, value)
 
 
-def read_identity(port: IsduPort, descriptor: SensorDescriptor) -> tuple[str, str]:
-    vendor = read_decoded_register(port, descriptor, "vendor_name")
-    product = read_decoded_register(port, descriptor, "product_name")
-    return str(vendor), str(product)
+def read_identity(
+    port: IsduPort, descriptor: SensorDescriptor, *, max_text_bytes: int = 32,
+) -> tuple[str, str]:
+    """Product name first (validation); vendor best-effort."""
+    product = read_text_register(port, descriptor, "product_name", max_bytes=max_text_bytes)
+    try:
+        vendor = read_text_register(port, descriptor, "vendor_name", max_bytes=max_text_bytes)
+    except Exception:
+        vendor = "?"
+    return vendor, product
 
 
 def assert_product_matches(descriptor: SensorDescriptor, product_name: str) -> None:

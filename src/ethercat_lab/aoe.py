@@ -65,6 +65,9 @@ def parse_packet_error(code: int) -> str:
 
 def parse_aoe_error(code: int) -> str:
     u, low, high = code & 0xFFFFFFFF, code & 0xFFFF, (code >> 16) & 0xFFFF
+    aoe_byte = (code >> 8) & 0xFF
+    if aoe_byte in _AOE_RESULT:
+        return f"AoE 0x{u:08x}: {_AOE_RESULT[aoe_byte]}"
     if high in _IOLINK_ISDU:
         return f"IO-Link ISDU 0x{high:04x}: {_IOLINK_ISDU[high]} (result 0x{u:08x})"
     if u in _ADS_ERR:

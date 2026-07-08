@@ -37,6 +37,7 @@ if TYPE_CHECKING:
 
 PRODUCT_CODE = 0x18503052
 _ISDU_SIZE = {0x0010: 2, 0x0011: 4}
+_ISDU_TRANSIENT = {0x707, 0x708, 0x712, 0x11000700}
 
 # CoE 0x80n0 — Beckhoff names vs hex subindex used in SDO writes
 _SUB_SETTINGS_PD_IN = 0x24   # subindex 36: process data in length
@@ -334,6 +335,9 @@ class EL6224(BeckhoffDevice):
             last = self.port_statuses(master)
             if all(last.get(p, (PortStatusError(0), PortStatusMode.DISABLED, PortStatusFlag(0)))[1]
                    == PortStatusMode.COMM_OP for p in ports):
+                for _ in range(20):
+                    master.cycle()
+                time.sleep(0.25)
                 return
             time.sleep(0.05)
         lines = [
@@ -377,6 +381,14 @@ def _isdu_err(exc, offset: int, ams_port: int, *, write: bool, nbytes: int) -> N
     ) from exc
 
 
+def _isdu_transient(exc: BaseException) -> bool:
+    if isinstance(exc, pysoem.AoeError):
+        code = exc.ams_error_code & 0xFFFFFFFF
+        if code in _ISDU_TRANSIENT or (code >> 8) & 0xFF == 0x07:
+            return True
+    return isinstance(exc, pysoem.PacketError)
+
+
 class IOLinkIsduChannel:
     """One EL6224 port: PRE-OP channel recipe, runtime ISDU and optional PDO parse."""
 
@@ -389,13 +401,32 @@ class IOLinkIsduChannel:
         self.port = port
         self.iolink_channel = self._iolinkmaster._channels[port]
 
-    def read_isdu(self, index: int, subindex: int = 0, *, size: int | None = None) -> bytes:
+    def read_isdu(
+        self,
+        index: int,
+        subindex: int = 0,
+        *,
+        size: int | None = None,
+        retries: int = 8,
+        retry_delay_s: float = 0.1,
+    ) -> bytes:
         n = size if size is not None else _ISDU_SIZE.get(index, 64)
         off, ams = iolink_index_offset(index, subindex), iolink_ams_port(self.port)
-        try:
-            return self._iolinkmaster._bus.aoe_read(self._iolinkmaster.slave_idx, INDEX_GROUP_COE, off, n, ams)
-        except (pysoem.AoeError, pysoem.PacketError) as exc:
-            _isdu_err(exc, off, ams, write=False, nbytes=n)
+        last_exc: BaseException | None = None
+        for attempt in range(retries):
+            try:
+                return self._iolinkmaster._bus.aoe_read(
+                    self._iolinkmaster.slave_idx, INDEX_GROUP_COE, off, n, ams,
+                )
+            except (pysoem.AoeError, pysoem.PacketError) as exc:
+                last_exc = exc
+                if attempt + 1 >= retries or not _isdu_transient(exc):
+                    _isdu_err(exc, off, ams, write=False, nbytes=n)
+                for _ in range(3):
+                    self._iolinkmaster._bus.cycle()
+                time.sleep(retry_delay_s)
+        assert last_exc is not None
+        _isdu_err(last_exc, off, ams, write=False, nbytes=n)  # type: ignore[arg-type]
 
     def write_isdu(self, index: int, data: bytes, subindex: int = 0) -> None:
         off, ams = iolink_index_offset(index, subindex), iolink_ams_port(self.port)

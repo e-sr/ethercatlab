@@ -37,9 +37,9 @@ class DeviceBase:
 
     def apply_isdu(self, port: IsduPort) -> SensorIsduProfile:
         """Write optional setup, validate identity, read profile, sync runtime."""
+        apply_isdu_writes(port, self.descriptor, self.isdu_writes())
         vendor, product = read_identity(port, self.descriptor)
         assert_product_matches(self.descriptor, product)
-        apply_isdu_writes(port, self.descriptor, self.isdu_writes())
         profile = self.load_isdu_profile(port, vendor=vendor, product=product)
         self.sync_from_profile(profile)
         self.isdu_profile = profile

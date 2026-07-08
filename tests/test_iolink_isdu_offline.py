@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import struct
+from typing import Any
 
 import pytest
 
+from ethercat_lab.aoe import parse_aoe_error
 from iolink_sensors.isdu import (
     assert_product_matches,
     decode_register_value,
@@ -24,18 +26,25 @@ class _FakeIsduPort:
         self._data = dict(data)
         self.writes: list[tuple[int, int, bytes]] = []
 
-    def read_isdu(self, index: int, subindex: int = 0, *, size: int | None = None) -> bytes:
+    def read_isdu(self, index: int, subindex: int = 0, *, size: int | None = None, **_: Any) -> bytes:
         key = (index, subindex)
         if key not in self._data:
             raise KeyError(f"no fake ISDU data for {key}")
         raw = self._data[key]
-        if size is not None and len(raw) != size:
-            raise ValueError(f"expected {size} bytes, got {len(raw)}")
+        if size is not None:
+            if len(raw) < size:
+                raise ValueError(f"expected at least {size} bytes, got {len(raw)}")
+            return raw[:size]
         return raw
 
     def write_isdu(self, index: int, data: bytes, subindex: int = 0) -> None:
         self.writes.append((index, subindex, bytes(data)))
         self._data[(index, subindex)] = bytes(data)
+
+
+def test_parse_aoe_error_11000700() -> None:
+    msg = parse_aoe_error(0x11000700)
+    assert "not in a ready state" in msg
 
 
 def test_register_byte_size_f32() -> None:
