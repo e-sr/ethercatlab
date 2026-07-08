@@ -62,12 +62,13 @@ class SensorSnapshot:
     psd4_p3: Psd4Sample
 
 
-def make_channels() -> list[SensorChannel]:
-    return [
-        SensorChannel(1, Pf2m7Device(setup=Pf2m7IsduSetup(display_unit=0))),
-        SensorChannel(2, Psd4Device()),
-        SensorChannel(3, Psd4Device()),
-    ]
+def make_channels(ports: tuple[int, ...] = (1, 2, 3)) -> list[SensorChannel]:
+    factory: dict[int, Pf2m7Device | Psd4Device] = {
+        1: Pf2m7Device(setup=Pf2m7IsduSetup(display_unit=0)),
+        2: Psd4Device(),
+        3: Psd4Device(),
+    }
+    return [SensorChannel(port, factory[port]) for port in ports]
 
 
 def register_channels(iolink: EL6224, channels: list[SensorChannel]) -> None:
@@ -83,9 +84,9 @@ def setup_preop(iolink: EL6224) -> None:
     iolink.configure_preop(aoe_init=True)
 
 
-def init_stack(master: Master) -> tuple[EL6224, list[SensorChannel]]:
+def init_stack(master: Master, ports: tuple[int, ...] = (1, 2, 3)) -> tuple[EL6224, list[SensorChannel]]:
     iolink = EL6224(master, EL6224_SLAVE)
-    channels = make_channels()
+    channels = make_channels(ports)
     register_channels(iolink, channels)
     setup_preop(iolink)
     return iolink, channels
@@ -97,10 +98,13 @@ def apply_sensors(
     channels: list[SensorChannel],
     *,
     enter_safeop: bool = True,
+    settle_s: float = 5.0,
 ) -> dict[int, SensorIsduProfile]:
     """Fase 2: ISDU — scrive setup (se definito), valida, legge profile."""
     if enter_safeop:
         master.to_safeop()
+    ports = [ch.port for ch in channels]
+    iolink.wait_ports_ready(master, ports, timeout_s=settle_s)
     profiles: dict[int, SensorIsduProfile] = {}
     for ch in channels:
         isdu = IOLinkIsduChannel(iolink, ch.port)
@@ -119,19 +123,29 @@ def read_sensors(
     master: Master,
     iolink: EL6224,
     channels: list[SensorChannel],
-) -> SensorSnapshot:
+) -> dict[int, Pf2m7Sample | Psd4Sample]:
     """Fase 3: lettura PDO — bus in OP (o SAFE-OP con almeno un ciclo)."""
     master.cycle()
     pd = iolink.decode_tx_pdo_named(master.pdoin(EL6224_SLAVE))
+    samples: dict[int, Pf2m7Sample | Psd4Sample] = {}
+    for ch in channels:
+        field = f"ch{ch.port}_iolink_pd"
+        samples[ch.port] = ch.device.sample(**pd[field])  # type: ignore[call-arg]
+    return samples
 
-    by_port = {ch.port: ch.device for ch in channels}
-    pf2m7 = by_port[1].sample(**pd["ch1_iolink_pd"])  # type: ignore[union-attr]
-    psd4_p2 = by_port[2].sample(**pd["ch2_iolink_pd"])  # type: ignore[union-attr]
-    psd4_p3 = by_port[3].sample(**pd["ch3_iolink_pd"])  # type: ignore[union-attr]
-    return SensorSnapshot(pf2m7=pf2m7, psd4_p2=psd4_p2, psd4_p3=psd4_p3)
+
+def snapshot_from_samples(samples: dict[int, Pf2m7Sample | Psd4Sample]) -> SensorSnapshot:
+    return SensorSnapshot(
+        pf2m7=samples[1],  # type: ignore[arg-type]
+        psd4_p2=samples[2],  # type: ignore[arg-type]
+        psd4_p3=samples[3],  # type: ignore[arg-type]
+    )
 
 
-def format_snapshot(snapshot: SensorSnapshot) -> str:
+def format_snapshot(snapshot: SensorSnapshot | dict[int, Pf2m7Sample | Psd4Sample]) -> str:
+    if isinstance(snapshot, dict):
+        parts = [f"p{p}={s.value:7.3f} {s.unit}" for p, s in sorted(snapshot.items())]
+        return "  ".join(parts)
     p1, p2, p3 = snapshot.pf2m7, snapshot.psd4_p2, snapshot.psd4_p3
     return (
         f"PF2M7={p1.value:7.3f} {p1.unit}  "
@@ -143,26 +157,38 @@ def format_snapshot(snapshot: SensorSnapshot) -> str:
 def run_demo(
     master: Master,
     *,
+    ports: tuple[int, ...] = (1, 2, 3),
     cycles: int = 10,
     period: float = 0.1,
 ) -> None:
     """Workflow completo: PRE-OP → ISDU (SAFE-OP) → OP → letture PDO."""
-    iolink, channels = init_stack(master)
+    iolink, channels = init_stack(master, ports)
     apply_sensors(master, iolink, channels)
     master.to_op()
     try:
         for i in range(cycles):
-            snapshot = read_sensors(master, iolink, channels)
-            print(f"[{i + 1}/{cycles}] {format_snapshot(snapshot)}")
+            samples = read_sensors(master, iolink, channels)
+            print(f"[{i + 1}/{cycles}] {format_snapshot(samples)}")
             if i + 1 < cycles and period > 0:
                 time.sleep(period)
     except KeyboardInterrupt:
         print("\nInterrotto.")
 
 
+def _parse_ports(text: str) -> tuple[int, ...]:
+    ports = tuple(int(p.strip()) for p in text.split(",") if p.strip())
+    if not ports or any(p not in (1, 2, 3, 4) for p in ports):
+        raise argparse.ArgumentTypeError("ports must be comma-separated values in 1..4")
+    return ports
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="3 sensori IO-Link su EL6224 (PF2M7 + 2× PSD4)")
     parser.add_argument("ifname", help="Interfaccia EtherCAT (es. enp2s0)")
+    parser.add_argument(
+        "--ports", type=_parse_ports, default=(1, 2, 3),
+        help="Porte IO-Link da usare (default: 1,2,3). Es. --ports 1 se solo PF2M7",
+    )
     parser.add_argument("-n", "--cycles", type=int, default=10, help="Cicli PDO in OP (default: 10)")
     parser.add_argument("-p", "--period", type=float, default=0.1, help="Periodo tra letture in secondi (default: 0.1)")
     args = parser.parse_args(argv)
@@ -170,7 +196,7 @@ def main(argv: list[str] | None = None) -> int:
     master = Master(args.ifname)
     master.open(manual_state_change=True)
     try:
-        run_demo(master, cycles=args.cycles, period=args.period)
+        run_demo(master, ports=args.ports, cycles=args.cycles, period=args.period)
     finally:
         master.close()
     return 0

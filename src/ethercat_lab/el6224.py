@@ -9,6 +9,8 @@ EtherCAT PDO layout (``TxPdoAssignment``) exposes opaque per-port blobs mapped t
 
 from __future__ import annotations
 
+import time
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from enum import IntEnum, IntFlag
 from typing import TYPE_CHECKING, Any, NoReturn
@@ -301,8 +303,48 @@ class EL6224(BeckhoffDevice):
         return self.expected_tx_pdo_byte_len()
 
     def iolink_master_state_to_enum(self, pdo_decoded: dict[str, Any]) -> dict[str, Any]:
-        state = {k:decode_port_status_byte(v) for k, v in pdo_decoded["dev_state_ports"].items()} 
+        state = {k: decode_port_status_byte(v) for k, v in pdo_decoded["dev_state_ports"].items()}
         return state
+
+    def port_statuses(self, master: Master) -> dict[int, tuple[PortStatusError, PortStatusMode, PortStatusFlag]]:
+        """Decode F100 port status bytes (call after ``master.cycle()``)."""
+        raw = master.pdoin(self.slave_idx)
+        decoded = self.decode_tx_pdo_named(raw, parse_iolink=False)
+        out: dict[int, tuple[PortStatusError, PortStatusMode, PortStatusFlag]] = {}
+        for key, value in decoded["dev_state_ports"].items():
+            if not key.startswith("state_ch"):
+                continue
+            out[int(key.removeprefix("state_ch"))] = decode_port_status_byte(int(value))
+        return out
+
+    def wait_ports_ready(
+        self,
+        master: Master,
+        ports: Sequence[int],
+        *,
+        timeout_s: float = 5.0,
+        cycles_per_try: int = 5,
+    ) -> None:
+        """Exchange PDO until ports reach COMM_OP (required before ISDU on EL6224)."""
+        deadline = time.monotonic() + timeout_s
+        last = self.port_statuses(master)
+        while time.monotonic() < deadline:
+            for _ in range(cycles_per_try):
+                master.cycle()
+            last = self.port_statuses(master)
+            if all(last.get(p, (PortStatusError(0), PortStatusMode.DISABLED, PortStatusFlag(0)))[1]
+                   == PortStatusMode.COMM_OP for p in ports):
+                return
+            time.sleep(0.05)
+        lines = [
+            f"  port {p}: mode={st[1].name} error={st[0].name if st[0] else 'none'}"
+            for p in ports if (st := last.get(p)) is not None
+        ]
+        raise RuntimeError(
+            "IO-Link port(s) not in COMM_OP — ISDU not available yet. "
+            "Check sensor connected, powered, and matching PD layout.\n"
+            + "\n".join(lines)
+        )
 
     def configure_preop(self, *, aoe_init: bool = True) -> None:
         if not self.channels:
