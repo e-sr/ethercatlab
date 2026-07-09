@@ -34,9 +34,8 @@ import time
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from ethercat_lab import IOLinkIsduChannel, Master
+from ethercat_lab import Master
 from ethercat_lab.el6224 import EL6224, IoLinkChannelConfig
-from iolink_sensors.isdu import SensorIsduProfile
 from iolink_sensors.pf2m7 import Pf2m7Device, Pf2m7IsduSetup, Pf2m7Sample
 from iolink_sensors.psd4 import Psd4Device, Psd4IsduSetup, Psd4Sample
 
@@ -99,24 +98,26 @@ def apply_sensors(
     *,
     enter_safeop: bool = True,
     settle_s: float = 5.0,
-) -> dict[int, SensorIsduProfile]:
-    """Fase 2: ISDU — scrive setup (se definito), valida, legge profile."""
+) -> None:
+    """Fase 2: ISDU — scrive setup (se definito), valida, sincronizza scaling."""
     if enter_safeop:
         master.to_safeop()
     ports = [ch.port for ch in channels]
     iolink.wait_ports_ready(master, ports, timeout_s=settle_s)
-    profiles: dict[int, SensorIsduProfile] = {}
     for ch in channels:
-        isdu = IOLinkIsduChannel(iolink, ch.port)
+        isdu, identity = iolink.sensor_isdu(ch.port, ch.device)
         writes = ch.device.isdu_writes()
-        profile = ch.device.apply_isdu(isdu)
-        profiles[ch.port] = profile
+        ch.device.apply_isdu(isdu, verify=False)
+        vendor, product = identity or ("?", "?")
         w = f" writes={writes}" if writes else ""
+        if isinstance(ch.device, Pf2m7Device):
+            scale = ch.device.scaling
+        else:
+            scale = ch.device.gain
         print(
-            f"port {ch.port}: {profile.vendor_name} / {profile.product_name} "
-            f"scale={profile.scaling} unit={profile.unit}{w}"
+            f"port {ch.port}: {vendor} / {product} "
+            f"scale={scale} unit={ch.device.unit}{w}"
         )
-    return profiles
 
 
 def read_sensors(

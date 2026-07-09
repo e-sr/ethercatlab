@@ -17,10 +17,10 @@ from typing import TYPE_CHECKING, Any, NoReturn
 
 import pysoem
 
-from iolink_sensors.models import DeviceBase, PdWireLayout, SensorDescriptor
+from iolink_sensors.models import  PdWireLayout
 
 from .beckhoff_device import BeckhoffDevice
-from .master import CoeTransfer, MasterState
+from .master import CoeTransfer
 from .pdo import PdoMapEntry, PdoMapping, TxPdoAssignment, RxPdoAssignment
 
 from .aoe import (
@@ -49,6 +49,7 @@ DEVICE_STATE_PORTS_TXPDO = 0x1A80
 DEVICE_STATE_DEVICE_TXPDO_LEGACY = 0x1A05
 DEVICE_STATE_PORTS_TXPDO_LEGACY = 0x1A04
 DEVICE_STATE_BYTES = 6
+COE_F100_INDEX = 0xF100
 
 _PD_FIELD = "iolink_pd"
 
@@ -236,6 +237,13 @@ def all_channel_coe_writes(channels: list[IoLinkChannelConfig]) -> list[CoeTrans
     return ops
 
 
+def _port_functional(
+    status: tuple[PortStatusError, PortStatusMode, PortStatusFlag],
+) -> bool:
+    errors, mode, _ = status
+    return mode == PortStatusMode.COMM_OP and not errors
+
+
 class EL6224(BeckhoffDevice):
     def __init__(self, bus: Master, slave_idx: int, *, include_device_state: bool = True) -> None:
         super().__init__(bus, slave_idx)
@@ -303,20 +311,50 @@ class EL6224(BeckhoffDevice):
     def expected_pdo_byte_len(self) -> int:
         return self.expected_tx_pdo_byte_len()
 
-    def iolink_master_state_to_enum(self, pdo_decoded: dict[str, Any]) -> dict[str, Any]:
-        state = {k: decode_port_status_byte(v) for k, v in pdo_decoded["dev_state_ports"].items()}
-        return state
-
-    def port_statuses(self, master: Master) -> dict[int, tuple[PortStatusError, PortStatusMode, PortStatusFlag]]:
-        """Decode F100 port status bytes (call after ``master.cycle()``)."""
-        raw = master.pdoin(self.slave_idx)
-        decoded = self.decode_tx_pdo_named(raw, parse_iolink=False)
+    def iolink_master_state_to_enum(
+        self, pdo_decoded: dict[str, Any],
+    ) -> dict[int, tuple[PortStatusError, PortStatusMode, PortStatusFlag]]:
+        """Decode F100 ``dev_state_ports`` bytes to port -> (errors, mode, flags)."""
         out: dict[int, tuple[PortStatusError, PortStatusMode, PortStatusFlag]] = {}
-        for key, value in decoded["dev_state_ports"].items():
-            if not key.startswith("state_ch"):
-                continue
-            out[int(key.removeprefix("state_ch"))] = decode_port_status_byte(int(value))
+        for key, value in pdo_decoded["dev_state_ports"].items():
+            if key.startswith("state_ch"):
+                out[int(key.removeprefix("state_ch"))] = decode_port_status_byte(int(value))
         return out
+
+    def port_statuses(
+        self, master: Master,
+    ) -> dict[int, tuple[PortStatusError, PortStatusMode, PortStatusFlag]]:
+        """F100 port status: PDO in SAFE-OP/OP, CoE ``0xF100:0n`` in PRE-OP."""
+        state = master.master.state
+        if state in (pysoem.SAFEOP_STATE, pysoem.OP_STATE) and self.include_device_state:
+            master.cycle()
+            decoded = self.decode_tx_pdo_named(master.pdoin(self.slave_idx), parse_iolink=False)
+            return self.iolink_master_state_to_enum(decoded)
+        out: dict[int, tuple[PortStatusError, PortStatusMode, PortStatusFlag]] = {}
+        for port in range(1, 5):
+            t = master.read_coe(self.slave_idx, COE_F100_INDEX, port)
+            if t.raw:
+                out[port] = decode_port_status_byte(t.raw[0])
+        return out
+
+    def iolink_master_active(self, master: Master, port: int) -> bool:
+        """True if F100 reports COMM_OP with no error nibble."""
+        _validate_port(port)
+        status = self.port_statuses(master).get(port)
+        return status is not None and _port_functional(status)
+
+    def get_isdu_channel(self, port: int, *, check: bool = True) -> IOLinkIsduChannel:
+        if port not in self._channels:
+            raise ValueError(f"Port {port} not found in channels")
+        if check and not self.iolink_master_active(self._bus, port):
+            status = self.port_statuses(self._bus).get(port)
+            if status is None:
+                raise RuntimeError(f"IO-Link port {port}: no F100 status")
+            errors, mode, _ = status
+            err = errors.name if errors else "none"
+            raise RuntimeError(f"IO-Link port {port} not functional: mode={mode.name} error={err}")
+        return IOLinkIsduChannel(iolinkmaster=self, port=port)
+
 
     def wait_ports_ready(
         self,
@@ -333,8 +371,7 @@ class EL6224(BeckhoffDevice):
             for _ in range(cycles_per_try):
                 master.cycle()
             last = self.port_statuses(master)
-            if all(last.get(p, (PortStatusError(0), PortStatusMode.DISABLED, PortStatusFlag(0)))[1]
-                   == PortStatusMode.COMM_OP for p in ports):
+            if all((st := last.get(p)) is not None and _port_functional(st) for p in ports):
                 for _ in range(20):
                     master.cycle()
                 time.sleep(0.25)
@@ -402,8 +439,12 @@ class IOLinkIsduChannel:
         self.iolink_channel = self._iolinkmaster._channels[port]
 
     def _check_master_state(self) -> None:
-        if self._iolinkmaster._bus.get_slave(self._iolinkmaster.slave_idx).state != MasterState.SAFEOP:
-            raise RuntimeError("Master is not in SAFE-OP state")
+        state = self._iolinkmaster._bus.master.state
+        if state not in (pysoem.SAFEOP_STATE, pysoem.OP_STATE):
+            raise RuntimeError(
+                f"ISDU requires SAFE-OP or OP, bus is "
+                f"{self._iolinkmaster._bus.state_to_str(state)}"
+            )
 
     def read_isdu(
         self,

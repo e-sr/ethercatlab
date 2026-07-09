@@ -2,6 +2,7 @@ meta:
   id: psd4
   vendor: WIKA
   profile: pressure_switch
+  product_name_match: PSD-4
 
 pd:
   frame_type: "2.2"
@@ -26,28 +27,583 @@ system_commands:
   adjust_zero_point: 165
 
 registers:
+  # --- Device-specific identification ---
+  error_count:
+    index: 32
+    subindex: 0
+    format: "u16"
+    access: r
+
+  order_number:
+    index: 64
+    subindex: 0
+    format: "t128"
+    access: r
+
+  # --- Process data scaling (active unit = index 66) ---
   unit_process_data:
     index: 66
     subindex: 0
     format: "u8"
     access: rw
+    fields:
+      - unit:
+          0: bar
+          1: mbar
+          2: MPa
+          3: kPa
+          4: PSI
+          5: kg/cm²
+          6: "%"
+
   gradient:
     index: 67
     subindex: 0
     format: "<f32"
     access: r
+
   range_start:
     index: 68
     subindex: 0
     format: "s16"
     access: r
+
   range_end:
     index: 69
     subindex: 0
     format: "s16"
     access: r
+
+  # --- Switching output 1 ---
+  ou1_mode:
+    index: 70
+    subindex: 0
+    format: "u8"
+    access: rw
+    fields:
+      - mode:
+          0: HNO
+          1: HNC
+          2: FNO
+          3: FNC
+
+  ou1_switch_delay_ms:
+    index: 71
+    subindex: 0
+    format: "u16"
+    access: rw
+
+  ou1_reset_delay_ms:
+    index: 72
+    subindex: 0
+    format: "u16"
+    access: rw
+
+  ou1_damping_ms:
+    index: 73
+    subindex: 0
+    format: "u16"
+    access: rw
+
+  ou1_polarity:
+    index: 74
+    subindex: 0
+    format: "u16"
+    access: rw
+    fields:
+      - polarity:
+          0: PNP
+          1: NPN
+
+  # --- Switching output 2 (dual-output models) ---
+  ou2_mode:
+    index: 80
+    subindex: 0
+    format: "u8"
+    access: rw
+    fields:
+      - mode:
+          0: HNO
+          1: HNC
+          2: FNO
+          3: FNC
+
+  ou2_switch_delay_ms:
+    index: 81
+    subindex: 0
+    format: "u16"
+    access: rw
+
+  ou2_reset_delay_ms:
+    index: 82
+    subindex: 0
+    format: "u16"
+    access: rw
+
+  ou2_damping_ms:
+    index: 83
+    subindex: 0
+    format: "u16"
+    access: rw
+
+  ou2_polarity:
+    index: 84
+    subindex: 0
+    format: "u16"
+    access: rw
+    fields:
+      - polarity:
+          0: PNP
+          1: NPN
+
+  # --- Analogue output (optional hardware) ---
+  ao_mode:
+    index: 90
+    subindex: 0
+    format: "u8"
+    access: rw
+    fields:
+      - signal:
+          0: "4..20mA"
+          1: "0..10V"
+
+  ao_damping_ms:
+    index: 91
+    subindex: 0
+    format: "u16"
+    access: rw
+
+  # --- Setpoints in unit "bar" (active when unit_process_data = bar) ---
+  ao_start_bar:
+    index: 140
+    subindex: 0
+    format: "s16"
+    access: rw
+
+  ao_end_bar:
+    index: 141
+    subindex: 0
+    format: "s16"
+    access: rw
+
+  sp1_bar:
+    index: 142
+    subindex: 0
+    format: "s16"
+    access: rw
+
+  rp1_bar:
+    index: 143
+    subindex: 0
+    format: "s16"
+    access: rw
+
+  sp2_bar:
+    index: 144
+    subindex: 0
+    format: "s16"
+    access: rw
+
+  rp2_bar:
+    index: 145
+    subindex: 0
+    format: "s16"
+    access: rw
+
+  # --- Setpoints in unit "mbar" ---
+  ao_start_mbar:
+    index: 155
+    subindex: 0
+    format: "s16"
+    access: rw
+
+  ao_end_mbar:
+    index: 156
+    subindex: 0
+    format: "s16"
+    access: rw
+
+  sp1_mbar:
+    index: 157
+    subindex: 0
+    format: "s16"
+    access: rw
+
+  rp1_mbar:
+    index: 158
+    subindex: 0
+    format: "s16"
+    access: rw
+
+  sp2_mbar:
+    index: 159
+    subindex: 0
+    format: "s16"
+    access: rw
+
+  rp2_mbar:
+    index: 160
+    subindex: 0
+    format: "s16"
+    access: rw
+
+  # --- Setpoints in unit "MPa" ---
+  ao_start_mpa:
+    index: 170
+    subindex: 0
+    format: "s16"
+    access: rw
+
+  ao_end_mpa:
+    index: 171
+    subindex: 0
+    format: "s16"
+    access: rw
+
+  sp1_mpa:
+    index: 172
+    subindex: 0
+    format: "s16"
+    access: rw
+
+  rp1_mpa:
+    index: 173
+    subindex: 0
+    format: "s16"
+    access: rw
+
+  sp2_mpa:
+    index: 174
+    subindex: 0
+    format: "s16"
+    access: rw
+
+  rp2_mpa:
+    index: 175
+    subindex: 0
+    format: "s16"
+    access: rw
+
+  # --- Setpoints in unit "kPa" ---
+  ao_start_kpa:
+    index: 185
+    subindex: 0
+    format: "s16"
+    access: rw
+
+  ao_end_kpa:
+    index: 186
+    subindex: 0
+    format: "s16"
+    access: rw
+
+  sp1_kpa:
+    index: 187
+    subindex: 0
+    format: "s16"
+    access: rw
+
+  rp1_kpa:
+    index: 188
+    subindex: 0
+    format: "s16"
+    access: rw
+
+  sp2_kpa:
+    index: 189
+    subindex: 0
+    format: "s16"
+    access: rw
+
+  rp2_kpa:
+    index: 190
+    subindex: 0
+    format: "s16"
+    access: rw
+
+  # --- Setpoints in unit "PSI" ---
+  ao_start_psi:
+    index: 200
+    subindex: 0
+    format: "s16"
+    access: rw
+
+  ao_end_psi:
+    index: 201
+    subindex: 0
+    format: "s16"
+    access: rw
+
+  sp1_psi:
+    index: 202
+    subindex: 0
+    format: "s16"
+    access: rw
+
+  rp1_psi:
+    index: 203
+    subindex: 0
+    format: "s16"
+    access: rw
+
+  sp2_psi:
+    index: 204
+    subindex: 0
+    format: "s16"
+    access: rw
+
+  rp2_psi:
+    index: 205
+    subindex: 0
+    format: "s16"
+    access: rw
+
+  # --- Setpoints in unit "kg/cm²" ---
+  ao_start_kg_cm2:
+    index: 215
+    subindex: 0
+    format: "s16"
+    access: rw
+
+  ao_end_kg_cm2:
+    index: 216
+    subindex: 0
+    format: "s16"
+    access: rw
+
+  sp1_kg_cm2:
+    index: 217
+    subindex: 0
+    format: "s16"
+    access: rw
+
+  rp1_kg_cm2:
+    index: 218
+    subindex: 0
+    format: "s16"
+    access: rw
+
+  sp2_kg_cm2:
+    index: 219
+    subindex: 0
+    format: "s16"
+    access: rw
+
+  rp2_kg_cm2:
+    index: 220
+    subindex: 0
+    format: "s16"
+    access: rw
+
+  # --- Setpoints in unit "%" ---
+  ao_start_pct:
+    index: 230
+    subindex: 0
+    format: "s16"
+    access: rw
+
+  ao_end_pct:
+    index: 231
+    subindex: 0
+    format: "s16"
+    access: rw
+
+  sp1_pct:
+    index: 232
+    subindex: 0
+    format: "s16"
+    access: rw
+
+  rp1_pct:
+    index: 233
+    subindex: 0
+    format: "s16"
+    access: rw
+
+  sp2_pct:
+    index: 234
+    subindex: 0
+    format: "s16"
+    access: rw
+
+  rp2_pct:
+    index: 235
+    subindex: 0
+    format: "s16"
+    access: rw
+
+  # --- Local display ---
+  display_unit:
+    index: 100
+    subindex: 0
+    format: "u8"
+    access: rw
+    fields:
+      - unit:
+          0: bar
+          1: mbar
+          2: MPa
+          3: kPa
+          4: PSI
+          5: kg/cm²
+          6: "%"
+
+  display_rotation:
+    index: 101
+    subindex: 0
+    format: "u8"
+    access: rw
+    fields:
+      - rotation:
+          0: standard
+          1: rotated_180
+
+  display_mode:
+    index: 102
+    subindex: 0
+    format: "u8"
+    access: rw
+    fields:
+      - mode:
+          0: actual_pressure
+          1: pressure_high
+          2: pressure_low
+          3: "off"
+          4: sp1_fh1
+          5: rp1_fl1
+          6: sp2_fh2
+          7: rp2_fl2
+
+  display_password:
+    index: 103
+    subindex: 0
+    format: "t32"
+    access: rw
+
+  display_damping_ms:
+    index: 104
+    subindex: 0
+    format: "u16"
+    access: rw
+
+  display_update_rate:
+    index: 105
+    subindex: 0
+    format: "u8"
+    access: rw
+    fields:
+      - rate:
+          0: 1Hz
+          1: 2Hz
+          2: 5Hz
+          3: 10Hz
+
+  locate_me:
+    index: 106
+    subindex: 0
+    format: "u8"
+    access: rw
+    fields:
+      - active:
+          0: "off"
+          1: "on"
+
+  display_resolution:
+    index: 107
+    subindex: 0
+    format: "u8"
+    access: rw
+    fields:
+      - resolution:
+          0: optimized
+          1: full
+
+  # --- Temperature ---
+  temperature_unit:
+    index: 110
+    subindex: 0
+    format: "u8"
+    access: rw
+    fields:
+      - unit:
+          0: "°C"
+          1: "°F"
+
+  temperature_actual:
+    index: 111
+    subindex: 0
+    format: "<f32"
+    access: r
+
+  temperature_low:
+    index: 112
+    subindex: 0
+    format: "<f32"
+    access: r
+
+  temperature_high:
+    index: 113
+    subindex: 0
+    format: "<f32"
+    access: r
+
+  temperature_low_since_power_up:
+    index: 114
+    subindex: 0
+    format: "<f32"
+    access: r
+
+  temperature_high_since_power_up:
+    index: 115
+    subindex: 0
+    format: "<f32"
+    access: r
+
+  # --- Diagnostics ---
+  pressure_overload_counter_s:
+    index: 120
+    subindex: 0
+    format: "u32"
+    access: r
+
+  operating_hours:
+    index: 121
+    subindex: 0
+    format: "u32"
+    access: r
+
+  operating_hours_since_power_up:
+    index: 122
+    subindex: 0
+    format: "u32"
+    access: r
+
   sensor_status:
     index: 123
     subindex: 0
     format: "u8"
+    access: r
+
+  pressure_low:
+    index: 124
+    subindex: 0
+    format: "s16"
+    access: r
+
+  pressure_high:
+    index: 125
+    subindex: 0
+    format: "s16"
+    access: r
+
+  pressure_low_since_power_up:
+    index: 126
+    subindex: 0
+    format: "s16"
+    access: r
+
+  pressure_high_since_power_up:
+    index: 127
+    subindex: 0
+    format: "s16"
     access: r

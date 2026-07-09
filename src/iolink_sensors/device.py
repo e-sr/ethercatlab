@@ -1,10 +1,26 @@
 from __future__ import annotations
 
+from enum import StrEnum
 from typing import Any
 
-from .isdu import IsduPort, SensorIsduProfile, apply_isdu_writes, assert_product_matches, read_identity
+from .isdu import (
+    IsduPort,
+    apply_isdu_writes,
+    assert_product_matches,
+    read_decoded_register,
+    read_identity,
+    write_decoded_register,
+)
 from .pd_layout import PdWireLayout
 from .schema import SensorDescriptor, PdSpec
+
+
+def register_enum(descriptor: SensorDescriptor) -> type[StrEnum]:
+    """Runtime ``StrEnum`` of register names (REPL tab-completion)."""
+    return StrEnum(  # type: ignore[call-overload]
+        f"{descriptor.meta.get('id', 'sensor')}_registers",
+        {name: name for name in sorted(descriptor.registers)},
+    )
 
 
 class DeviceBase:
@@ -12,7 +28,7 @@ class DeviceBase:
 
     def __init__(self, descriptor: SensorDescriptor) -> None:
         self.descriptor = descriptor
-        self.isdu_profile: SensorIsduProfile | None = None
+        self.Registers = register_enum(descriptor)
         pd: PdSpec = descriptor.pd
         if pd.input is not None:
             self._pd_in_layout = PdWireLayout(fields=pd.input.fields, sio=False)
@@ -24,29 +40,46 @@ class DeviceBase:
             self._pd_out_layout = None
 
     def isdu_writes(self) -> dict[str, Any]:
-        """Register values to push before reading profile. Empty = read-only."""
+        """Register values to push before ISDU sync. Empty = read-only."""
         return {}
 
-    def load_isdu_profile(
-        self, port: IsduPort, *, vendor: str, product: str,
-    ) -> SensorIsduProfile:
-        raise NotImplementedError(f"{type(self).__name__} has no ISDU profile loader")
+    def read_reg(self, port: IsduPort, name: str) -> Any:
+        return read_decoded_register(port, self.descriptor, name)
 
-    def sync_from_profile(self, profile: SensorIsduProfile) -> None:
-        """Apply profile fields to runtime scaling used by ``sample()``."""
+    def write_reg(self, port: IsduPort, name: str, value: Any) -> None:
+        write_decoded_register(port, self.descriptor, name, value)
 
-    def apply_isdu(self, port: IsduPort) -> SensorIsduProfile:
-        """Write optional setup, validate identity, read profile, sync runtime."""
-        apply_isdu_writes(port, self.descriptor, self.isdu_writes())
+    def system_command(self, port: IsduPort, name: str) -> None:
+        code = self.descriptor.system_commands[name]
+        port.write_isdu(2, bytes([code]), 0)
+
+    def check_port(self, port: IsduPort) -> tuple[str, str]:
+        """Read identity and verify vendor/product match this device descriptor."""
         vendor, product = read_identity(port, self.descriptor)
         assert_product_matches(self.descriptor, product)
-        profile = self.load_isdu_profile(port, vendor=vendor, product=product)
-        self.sync_from_profile(profile)
-        self.isdu_profile = profile
-        return profile
+        expected_vendor = self.descriptor.meta.get("vendor")
+        if expected_vendor and expected_vendor.lower() not in vendor.lower():
+            raise ValueError(
+                f"Unexpected vendor {vendor!r} (expected {expected_vendor!r})"
+            )
+        return vendor, product
 
-    def configure_from_isdu(self, port: IsduPort) -> SensorIsduProfile:
-        return self.apply_isdu(port)
+    def sync_from_isdu(self, port: IsduPort) -> None:
+        """Read ISDU registers and populate runtime state used by ``sample()``."""
+        raise NotImplementedError(f"{type(self).__name__} has no ISDU sync")
+
+    def apply_isdu(self, port: IsduPort, *, verify: bool = True) -> None:
+        """Write optional setup, validate identity, sync runtime from ISDU."""
+        apply_isdu_writes(port, self.descriptor, self.isdu_writes())
+        if verify:
+            self.check_port(port)
+        else:
+            _, product = read_identity(port, self.descriptor)
+            assert_product_matches(self.descriptor, product)
+        self.sync_from_isdu(port)
+
+    def configure_from_isdu(self, port: IsduPort, *, verify: bool = True) -> None:
+        self.apply_isdu(port, verify=verify)
 
     @property
     def pd_in_layout(self) -> PdWireLayout | None:

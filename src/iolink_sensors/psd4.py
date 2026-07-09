@@ -3,9 +3,19 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from iolink_sensors.isdu import IsduPort, SensorIsduProfile, read_decoded_register
+from iolink_sensors.isdu import IsduPort
 from iolink_sensors.loader import load_descriptor
 from iolink_sensors.models import DeviceBase
+
+_PRESSURE_UNIT: dict[int, str] = {
+    0: "bar",
+    1: "mbar",
+    2: "MPa",
+    3: "kPa",
+    4: "PSI",
+    5: "kg/cm²",
+    6: "%",
+}
 
 
 @dataclass(frozen=True, slots=True)
@@ -29,34 +39,30 @@ class Psd4Device(DeviceBase):
         self._setup = setup or Psd4IsduSetup()
         self._gain = 1.0
         self._unit = "?"
+        self._sensor_status = 0
 
     @property
     def gain(self) -> float:
         return self._gain
+
+    @property
+    def unit(self) -> str:
+        return self._unit
+
+    @property
+    def sensor_status(self) -> int:
+        return self._sensor_status
 
     def isdu_writes(self) -> dict[str, Any]:
         if self._setup.unit_process_data is None:
             return {}
         return {"unit_process_data": self._setup.unit_process_data}
 
-    def load_isdu_profile(
-        self, port: IsduPort, *, vendor: str, product: str,
-    ) -> SensorIsduProfile:
-        gain = float(read_decoded_register(port, self.descriptor, "gradient"))
-        unit_code = int(read_decoded_register(port, self.descriptor, "unit_process_data"))
-        status = int(read_decoded_register(port, self.descriptor, "sensor_status"))
-        return SensorIsduProfile(
-            product_name=product,
-            vendor_name=vendor,
-            scaling=gain,
-            unit=f"unit:{unit_code}",
-            device_status=status,
-            extra={"unit_process_data": unit_code},
-        )
-
-    def sync_from_profile(self, profile: SensorIsduProfile) -> None:
-        self._gain = float(profile.scaling or self._gain)
-        self._unit = profile.unit or self._unit
+    def sync_from_isdu(self, port: IsduPort) -> None:
+        self._gain = float(self.read_reg(port, "gradient"))
+        unit_code = int(self.read_reg(port, "unit_process_data"))
+        self._unit = _PRESSURE_UNIT.get(unit_code, f"code:{unit_code}")
+        self._sensor_status = int(self.read_reg(port, "sensor_status"))
 
     def sample(self, process_value_raw14: int, ou1: bool, ou2: bool) -> Psd4Sample:
         return Psd4Sample(

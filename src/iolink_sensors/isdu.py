@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
 from typing import Any, Protocol
 
 import bitstruct
@@ -18,19 +17,6 @@ class IsduPort(Protocol):
 
 # Backward-compatible alias
 IsduReader = IsduPort
-
-
-@dataclass(frozen=True, slots=True)
-class SensorIsduProfile:
-    """Identity + scaling read from device ISDU after optional writes."""
-
-    product_name: str
-    vendor_name: str
-    scaling: float | None = None
-    offset: float | None = None
-    unit: str | None = None
-    device_status: int | None = None
-    extra: dict[str, Any] = field(default_factory=dict)
 
 
 def _bitstruct_format(fmt: str) -> str:
@@ -136,11 +122,17 @@ def read_identity(
 
 
 def assert_product_matches(descriptor: SensorDescriptor, product_name: str) -> None:
-    expected = descriptor.meta.get("id")
-    if not expected:
+    needles: list[str] = []
+    for key in ("product_name_match", "id"):
+        value = descriptor.meta.get(key)
+        if value:
+            needles.append(str(value).lower().replace("-", "").replace("_", ""))
+    if not needles:
         return
-    token = str(expected).lower()
-    if token not in product_name.lower():
-        raise ValueError(
-            f"Unexpected product {product_name!r} (expected id {expected!r} in product name)"
-        )
+    normalized = product_name.lower().replace("-", "").replace("_", "")
+    if any(needle in normalized for needle in needles):
+        return
+    expected = descriptor.meta.get("product_name_match") or descriptor.meta.get("id")
+    raise ValueError(
+        f"Unexpected product {product_name!r} (expected {expected!r} in product name)"
+    )

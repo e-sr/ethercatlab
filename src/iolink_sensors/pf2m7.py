@@ -3,18 +3,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from iolink_sensors.isdu import (
-    IsduPort,
-    SensorIsduProfile,
-    read_decoded_register,
-)
+from iolink_sensors.isdu import IsduPort
 from iolink_sensors.loader import load_descriptor
 from iolink_sensors.models import DeviceBase
-
-_FLOW_SCALING_TABLE: dict[int, float] = {
-    1: 0.000250, 2: 0.000500, 5: 0.001250, 10: 0.002500,
-    25: 0.006250, 50: 0.012500, 100: 0.025000,
-}
 
 _DISPLAY_UNIT: dict[int, str] = {
     0: "L/min",
@@ -24,9 +15,8 @@ _DISPLAY_UNIT: dict[int, str] = {
 
 @dataclass(frozen=True, slots=True)
 class Pf2m7IsduSetup:
-    """Optional ISDU writes before profile read. ``None`` = leave device unchanged."""
+    """Optional ISDU writes before sync. ``None`` = leave device unchanged."""
     display_unit: int | None = None
-    flow_range_l: int | None = None
 
 
 @dataclass(frozen=True)
@@ -39,37 +29,31 @@ class Pf2m7Sample:
 class Pf2m7Device(DeviceBase):
     DESCRIPTOR = load_descriptor("pf2m7")
 
-    def __init__(
-        self,
-        *,
-        setup: Pf2m7IsduSetup | None = None,
-    ) -> None:
+    def __init__(self, *, setup: Pf2m7IsduSetup | None = None) -> None:
         super().__init__(self.DESCRIPTOR)
         self._setup = setup or Pf2m7IsduSetup()
-        self._flow_range_l = self._setup.flow_range_l
-        self._scaling = _FLOW_SCALING_TABLE.get(self._flow_range_l, 0.006250) if self._flow_range_l else 0.006250
+        self._scaling = 0.006250
         self._offset = 0.0
-        self._unit = _DISPLAY_UNIT.get(self._setup.display_unit, f"code:{self._setup.display_unit}") if self._setup.display_unit else "L/min"
+        self._unit = "L/min"
 
-    def load_isdu_profile(
-        self, port: IsduPort, *, vendor: str, product: str,
-    ) -> SensorIsduProfile:
-        scaling = float(read_decoded_register(port, self.descriptor, "gradient_a"))
-        offset = float(read_decoded_register(port, self.descriptor, "gradient_b"))
-        unit_code = int(read_decoded_register(port, self.descriptor, "display_unit"))
-        return SensorIsduProfile(
-            product_name=product,
-            vendor_name=vendor,
-            scaling=scaling,
-            offset=offset,
-            unit=_DISPLAY_UNIT.get(unit_code, f"code:{unit_code}"),
-            extra={"display_unit_code": unit_code},
-        )
+    @property
+    def scaling(self) -> float:
+        return self._scaling
 
-    def sync_from_profile(self, profile: SensorIsduProfile) -> None:
-        self._scaling = float(profile.scaling or self._scaling)
-        self._offset = float(profile.offset or 0.0)
-        self._unit = profile.unit or self._unit
+    @property
+    def unit(self) -> str:
+        return self._unit
+
+    def isdu_writes(self) -> dict[str, Any]:
+        if self._setup.display_unit is None:
+            return {}
+        return {"display_unit": self._setup.display_unit}
+
+    def sync_from_isdu(self, port: IsduPort) -> None:
+        self._scaling = float(self.read_reg(port, "gradient_a"))
+        self._offset = float(self.read_reg(port, "gradient_b"))
+        unit_code = int(self.read_reg(port, "display_unit"))
+        self._unit = _DISPLAY_UNIT.get(unit_code, f"code:{unit_code}")
 
     def sample(
         self,
