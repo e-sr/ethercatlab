@@ -320,12 +320,12 @@ class EL6224(BeckhoffDevice):
             if key.startswith("state_ch"):
                 out[int(key.removeprefix("state_ch"))] = decode_port_status_byte(int(value))
         return out
-
+    @property
     def port_statuses(
-        self, master: Master,
-    ) -> dict[int, tuple[PortStatusError, PortStatusMode, PortStatusFlag]]:
+        self) -> dict[int, tuple[PortStatusError, PortStatusMode, PortStatusFlag]]:
         """F100 port status: PDO in SAFE-OP/OP, CoE ``0xF100:0n`` in PRE-OP."""
-        state = master.master.state
+        master = self._bus.master
+        state = master.state
         if state in (pysoem.SAFEOP_STATE, pysoem.OP_STATE) and self.include_device_state:
             master.cycle()
             decoded = self.decode_tx_pdo_named(master.pdoin(self.slave_idx), parse_iolink=False)
@@ -337,17 +337,17 @@ class EL6224(BeckhoffDevice):
                 out[port] = decode_port_status_byte(t.raw[0])
         return out
 
-    def iolink_master_active(self, master: Master, port: int) -> bool:
+    def iolink_master_active(self, port: int) -> bool:
         """True if F100 reports COMM_OP with no error nibble."""
         _validate_port(port)
-        status = self.port_statuses(master).get(port)
+        status = self.port_statuses.get(port)
         return status is not None and _port_functional(status)
 
     def get_isdu_channel(self, port: int, *, check: bool = True) -> IOLinkIsduChannel:
         if port not in self._channels:
             raise ValueError(f"Port {port} not found in channels")
-        if check and not self.iolink_master_active(self._bus, port):
-            status = self.port_statuses(self._bus).get(port)
+        if check and not self.iolink_master_active( port):
+            status = self.port_statuses.get(port)
             if status is None:
                 raise RuntimeError(f"IO-Link port {port}: no F100 status")
             errors, mode, _ = status
