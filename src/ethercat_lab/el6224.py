@@ -324,11 +324,8 @@ class EL6224(BeckhoffDevice):
     def port_statuses(
         self) -> dict[int, tuple[PortStatusError, PortStatusMode, PortStatusFlag]]:
         """F100 port status: PDO in SAFE-OP/OP, CoE ``0xF100:0n`` in PRE-OP."""
-        master = self._bus.master
-        state = master.state
-        if state in (pysoem.SAFEOP_STATE, pysoem.OP_STATE) and self.include_device_state:
-            master.cycle()
-            decoded = self.decode_tx_pdo_named(master.pdoin(self.slave_idx), parse_iolink=False)
+        if self._bus.state in (pysoem.SAFEOP_STATE, pysoem.OP_STATE) and self.include_device_state:
+            decoded = self.decode_tx_pdo_named(self._bus.pdoin(self.slave_idx), parse_iolink=False)
             return self.iolink_master_state_to_enum(decoded)
         out: dict[int, tuple[PortStatusError, PortStatusMode, PortStatusFlag]] = {}
         for port in range(1, 5):
@@ -354,38 +351,6 @@ class EL6224(BeckhoffDevice):
             err = errors.name if errors else "none"
             raise RuntimeError(f"IO-Link port {port} not functional: mode={mode.name} error={err}")
         return IOLinkIsduChannel(iolinkmaster=self, port=port)
-
-
-    def wait_ports_ready(
-        self,
-        master: Master,
-        ports: Sequence[int],
-        *,
-        timeout_s: float = 5.0,
-        cycles_per_try: int = 5,
-    ) -> None:
-        """Exchange PDO until ports reach COMM_OP (required before ISDU on EL6224)."""
-        deadline = time.monotonic() + timeout_s
-        last = self.port_statuses
-        while time.monotonic() < deadline:
-            for _ in range(cycles_per_try):
-                master.cycle()
-            last = self.port_statuses
-            if all((st := last.get(p)) is not None and _port_functional(st) for p in ports):
-                for _ in range(20):
-                    master.cycle()
-                time.sleep(0.25)
-                return
-            time.sleep(0.05)
-        lines = [
-            f"  port {p}: mode={st[1].name} error={st[0].name if st[0] else 'none'}"
-            for p in ports if (st := last.get(p)) is not None
-        ]
-        raise RuntimeError(
-            "IO-Link port(s) not in COMM_OP — ISDU not available yet. "
-            "Check sensor connected, powered, and matching PD layout.\n"
-            + "\n".join(lines)
-        )
 
     def configure_preop(self, *, aoe_init: bool = True) -> None:
         if not self.channels:
