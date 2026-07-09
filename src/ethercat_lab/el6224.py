@@ -332,7 +332,7 @@ class EL6224(BeckhoffDevice):
             return self.iolink_master_state_to_enum(decoded)
         out: dict[int, tuple[PortStatusError, PortStatusMode, PortStatusFlag]] = {}
         for port in range(1, 5):
-            t = master.read_coe(self.slave_idx, COE_F100_INDEX, port)
+            t = self._bus.read_coe(self.slave_idx, COE_F100_INDEX, port)
             if t.raw:
                 out[port] = decode_port_status_byte(t.raw[0])
         return out
@@ -366,11 +366,11 @@ class EL6224(BeckhoffDevice):
     ) -> None:
         """Exchange PDO until ports reach COMM_OP (required before ISDU on EL6224)."""
         deadline = time.monotonic() + timeout_s
-        last = self.port_statuses(master)
+        last = self.port_statuses
         while time.monotonic() < deadline:
             for _ in range(cycles_per_try):
                 master.cycle()
-            last = self.port_statuses(master)
+            last = self.port_statuses
             if all((st := last.get(p)) is not None and _port_functional(st) for p in ports):
                 for _ in range(20):
                     master.cycle()
