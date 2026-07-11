@@ -9,7 +9,7 @@ pd:
     fields:
       - typeprefix: s
         length: 16
-        name: pd_raw_s16
+        name: process_value
       - typeprefix: b
         length: 1
         name: error_diag

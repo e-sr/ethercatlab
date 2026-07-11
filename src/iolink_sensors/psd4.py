@@ -27,8 +27,8 @@ class Psd4IsduSetup:
 class Psd4Sample:
     value: float
     unit: str
-    ou1: bool
-    ou2: bool
+    out1: bool
+    out2: bool
 
 
 class Psd4Device(DeviceBase):
@@ -64,12 +64,12 @@ class Psd4Device(DeviceBase):
         self._unit = _PRESSURE_UNIT.get(unit_code, f"code:{unit_code}")
         self._sensor_status = int(self.read_reg(port, "sensor_status"))
 
-    def sample(self, process_value_raw14: int, ou1: bool, ou2: bool) -> Psd4Sample:
+    def sample(self, process_value: int, out1: bool, out2: bool) -> Psd4Sample:
         return Psd4Sample(
-            value=float(process_value_raw14) * self._gain,
+            value=float(process_value) * self._gain,
             unit=self._unit,
-            ou1=ou1,
-            ou2=ou2,
+            out1=out1,
+            out2=out2,
         )
 
     def parse_sample(self, raw: bytes) -> Psd4Sample:

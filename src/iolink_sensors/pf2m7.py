@@ -57,7 +57,7 @@ class Pf2m7Device(DeviceBase):
 
     def sample(
         self,
-        pd_raw_s16: int,
+        process_value: int,
         error_diag: bool,
         fixed_output: bool,
         _pad1: bool,
@@ -67,7 +67,7 @@ class Pf2m7Device(DeviceBase):
         out1: bool = False,
     ) -> Pf2m7Sample:
         return Pf2m7Sample(
-            value=float(pd_raw_s16) * self._scaling + self._offset,
+            value=float(process_value) * self._scaling + self._offset,
             unit=self._unit,
             flags={
                 "error_diag": error_diag,

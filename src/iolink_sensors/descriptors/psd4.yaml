@@ -10,13 +10,13 @@ pd:
     fields:
       - typeprefix: s
         length: 14
-        name: process_value_raw14
+        name: process_value
       - typeprefix: b
         length: 1
-        name: ou2
+        name: out2
       - typeprefix: b
         length: 1
-        name: ou1
+        name: out1
 
 system_commands:
   reset_high_pressure: 160
