@@ -312,7 +312,7 @@ class EL6224(BeckhoffDevice):
         return self.expected_tx_pdo_byte_len()
 
     def iolink_master_state_to_enum(
-        self, pdo_decoded: dict[str, Any],
+        self, dev_state_ports: dict[str, int],,
     ) -> dict[int, tuple[PortStatusError, PortStatusMode, PortStatusFlag]]:
         """Decode F100 ``dev_state_ports`` bytes to port -> (errors, mode, flags)."""
         out: dict[int, tuple[PortStatusError, PortStatusMode, PortStatusFlag]] = {}
@@ -320,13 +320,11 @@ class EL6224(BeckhoffDevice):
             if key.startswith("state_ch"):
                 out[int(key.removeprefix("state_ch"))] = decode_port_status_byte(int(value))
         return out
+
     @property
-    def port_statuses(
+    def port_statuses_F100(
         self) -> dict[int, tuple[PortStatusError, PortStatusMode, PortStatusFlag]]:
         """F100 port status: PDO in SAFE-OP/OP, CoE ``0xF100:0n`` in PRE-OP."""
-        if self._bus.state in (pysoem.SAFEOP_STATE, pysoem.OP_STATE) and self.include_device_state:
-            decoded = self.decode_tx_pdo_named(self._bus.pdoin(self.slave_idx), parse_iolink=False)
-            return self.iolink_master_state_to_enum(decoded)
         out: dict[int, tuple[PortStatusError, PortStatusMode, PortStatusFlag]] = {}
         for port in range(1, 5):
             t = self._bus.read_coe(self.slave_idx, COE_F100_INDEX, port)
@@ -337,19 +335,17 @@ class EL6224(BeckhoffDevice):
     def iolink_master_active(self, port: int) -> bool:
         """True if F100 reports COMM_OP with no error nibble."""
         _validate_port(port)
-        status = self.port_statuses.get(port)
+        status = self.port_statuses_F100.get(port)
         return status is not None and _port_functional(status)
 
-    def get_isdu_channel(self, port: int, *, check: bool = True) -> IOLinkIsduChannel:
+    def get_isdu_channel(self, port: int) -> IOLinkIsduChannel:
         if port not in self._channels:
             raise ValueError(f"Port {port} not found in channels")
-        if check and not self.iolink_master_active( port):
-            status = self.port_statuses.get(port)
-            if status is None:
-                raise RuntimeError(f"IO-Link port {port}: no F100 status")
-            errors, mode, _ = status
-            err = errors.name if errors else "none"
-            raise RuntimeError(f"IO-Link port {port} not functional: mode={mode.name} error={err}")
+        status = self.port_statuses_F100.get(port)
+        if status is None:
+            raise RuntimeError(f"IO-Link port {port}: no F100 status")
+        if not _port_functional(status):
+            raise RuntimeError(f"IO-Link port {port} not functional: mode={status[1].name} error={status[0].name}")
         return IOLinkIsduChannel(iolinkmaster=self, port=port)
 
     def configure_preop(self, *, aoe_init: bool = True) -> None:
