@@ -22,6 +22,12 @@ def register_enum(descriptor: SensorDescriptor) -> type[StrEnum]:
         {name: name for name in sorted(descriptor.registers)},
     )
 
+def commands_enum(descriptor: SensorDescriptor) -> type[StrEnum]:
+    """Runtime ``StrEnum`` of command names (REPL tab-completion)."""
+    return StrEnum(  # type: ignore[call-overload]
+        f"{descriptor.meta.get('id', 'sensor')}_commands",
+        {name: name for name in sorted(descriptor.system_commands)},
+    )
 
 class DeviceBase:
     """Wire-level PD parse/pack; ISDU setup via ``apply_isdu`` (SAFE-OP / OP)."""
@@ -29,6 +35,7 @@ class DeviceBase:
     def __init__(self, descriptor: SensorDescriptor) -> None:
         self.descriptor = descriptor
         self.Registers = register_enum(descriptor)
+        self.Commands = commands_enum(descriptor)
         pd: PdSpec = descriptor.pd
         if pd.input is not None:
             self._pd_in_layout = PdWireLayout(fields=pd.input.fields, sio=False)
@@ -43,15 +50,21 @@ class DeviceBase:
         """Register values to push before ISDU sync. Empty = read-only."""
         return {}
 
-    def read_reg(self, port: IsduPort, name: str) -> Any:
+    def read_reg(self, port: IsduPort, name: str|type[StrEnum]) -> Any:
+        if isinstance(name, type[StrEnum]): # type: ignore[arg-type]
+            name = str(name.value) # type: ignore[attr-defined]
         return read_decoded_register(port, self.descriptor, name)
 
-    def write_reg(self, port: IsduPort, name: str, value: Any) -> None:
+    def write_reg(self, port: IsduPort, name: str|type[StrEnum], value: Any) -> None:
+        if isinstance(name, type[StrEnum]): # type: ignore[arg-type]
+            name = str(name.value) # type: ignore[attr-defined]
         write_decoded_register(port, self.descriptor, name, value)
 
-    def system_command(self, port: IsduPort, name: str) -> None:
-        code = self.descriptor.system_commands[name]
-        port.write_isdu(2, bytes([code]), 0)
+    def system_command(self, port: IsduPort, name: str|type[StrEnum]) -> None:
+        if isinstance(name, type[StrEnum]): # type: ignore[arg-type]
+            name = str(name.value) # type: ignore[attr-defined] 
+        code = self.Commands[name] # type: ignore[attr-defined]
+        port.write_isdu(2, bytes([code]), 0) # type: ignore[arg-type]
 
     def check_port(self, port: IsduPort) -> tuple[str, str]:
         """Read identity and verify vendor/product match this device descriptor."""
