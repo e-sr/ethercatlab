@@ -163,3 +163,16 @@ def test_write_rejects_readonly_register() -> None:
     port = _FakeIsduPort({})
     with pytest.raises(ValueError, match="cannot write"):
         write_decoded_register(port, desc, "gradient_a", 1.0)
+
+
+def test_device_register_and_command_enums() -> None:
+    from iolink_sensors.device import register_address, split_register_address
+
+    dev = Psd4Device()
+    assert dev.Registers.gradient.value == register_address(0x43)
+    assert split_register_address(dev.Registers.gradient.value) == (0x43, 0)
+    assert dev.Commands.reset_high_pressure.value == 160
+    assert dev.read_reg(
+        _FakeIsduPort({(0x43, 0): struct.pack("<f", 0.1)}),
+        dev.Registers.gradient,
+    ) == pytest.approx(0.1)

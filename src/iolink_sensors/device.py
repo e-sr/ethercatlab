@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from enum import StrEnum
+from enum import IntEnum
 from typing import Any
 
 from .isdu import (
@@ -15,19 +15,39 @@ from .pd_layout import PdWireLayout
 from .schema import SensorDescriptor, PdSpec
 
 
-def register_enum(descriptor: SensorDescriptor) -> type[StrEnum]:
-    """Runtime ``StrEnum`` of register names (REPL tab-completion)."""
-    return StrEnum(  # type: ignore[call-overload]
+def register_address(index: int, subindex: int = 0) -> int:
+    return (index << 8) | subindex
+
+
+def split_register_address(value: int) -> tuple[int, int]:
+    return value >> 8, value & 0xFF
+
+
+def _reg_key(name: str | IntEnum) -> str:
+    if isinstance(name, IntEnum):
+        return name.name
+    return name
+
+
+def register_enum(descriptor: SensorDescriptor) -> type[IntEnum]:
+    """Runtime ``IntEnum`` of register addresses (REPL tab-completion)."""
+    members = {
+        name: register_address(reg.index, reg.subindex)
+        for name, reg in descriptor.registers.items()
+    }
+    return IntEnum(  # type: ignore[call-overload]
         f"{descriptor.meta.get('id', 'sensor')}_registers",
-        {name: name for name in sorted(descriptor.registers)},
+        members,
     )
 
-def commands_enum(descriptor: SensorDescriptor) -> type[StrEnum]:
-    """Runtime ``StrEnum`` of command names (REPL tab-completion)."""
-    return StrEnum(  # type: ignore[call-overload]
+
+def commands_enum(descriptor: SensorDescriptor) -> type[IntEnum]:
+    """Runtime ``IntEnum`` of system command codes (REPL tab-completion)."""
+    return IntEnum(  # type: ignore[call-overload]
         f"{descriptor.meta.get('id', 'sensor')}_commands",
-        {name: name for name in sorted(descriptor.system_commands)},
+        dict(sorted(descriptor.system_commands.items())),
     )
+
 
 class DeviceBase:
     """Wire-level PD parse/pack; ISDU setup via ``apply_isdu`` (SAFE-OP / OP)."""
@@ -50,21 +70,18 @@ class DeviceBase:
         """Register values to push before ISDU sync. Empty = read-only."""
         return {}
 
-    def read_reg(self, port: IsduPort, name: str|type[StrEnum]) -> Any:
-        if isinstance(name, type[StrEnum]): # type: ignore[arg-type]
-            name = str(name.value) # type: ignore[attr-defined]
-        return read_decoded_register(port, self.descriptor, name)
+    def read_reg(self, port: IsduPort, name: str | IntEnum) -> Any:
+        return read_decoded_register(port, self.descriptor, _reg_key(name))
 
-    def write_reg(self, port: IsduPort, name: str|type[StrEnum], value: Any) -> None:
-        if isinstance(name, type[StrEnum]): # type: ignore[arg-type]
-            name = str(name.value) # type: ignore[attr-defined]
-        write_decoded_register(port, self.descriptor, name, value)
+    def write_reg(self, port: IsduPort, name: str | IntEnum, value: Any) -> None:
+        write_decoded_register(port, self.descriptor, _reg_key(name), value)
 
-    def system_command(self, port: IsduPort, name: str|type[StrEnum]) -> None:
-        if isinstance(name, type[StrEnum]): # type: ignore[arg-type]
-            name = str(name.value) # type: ignore[attr-defined] 
-        code = self.Commands[name] # type: ignore[attr-defined]
-        port.write_isdu(2, bytes([code]), 0) # type: ignore[arg-type]
+    def system_command(self, port: IsduPort, name: str | IntEnum) -> None:
+        if isinstance(name, IntEnum):
+            code = name.value
+        else:
+            code = self.descriptor.system_commands[name]
+        port.write_isdu(2, bytes([code]), 0)
 
     def check_port(self, port: IsduPort) -> tuple[str, str]:
         """Read identity and verify vendor/product match this device descriptor."""
@@ -103,10 +120,16 @@ class DeviceBase:
         return self._pd_out_layout
 
     def _decode_pd(self, raw: bytes) -> list[Any]:
+        if self._pd_in_layout is None:
+            raise ValueError("PD input layout not configured")
         return self._pd_in_layout.decode(raw)
 
     def _decode_pd_named(self, raw: bytes) -> dict[str, Any]:
+        if self._pd_in_layout is None:
+            raise ValueError("PD input layout not configured")
         return self._pd_in_layout.decode_named(raw)
 
     def _encode_pd(self, values: list[Any]) -> bytes:
-        return self.pd_out_layout.encode(values)
+        if self._pd_out_layout is None:
+            raise ValueError("PD output layout not configured")
+        return self._pd_out_layout.encode(values)

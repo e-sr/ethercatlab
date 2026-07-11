@@ -276,7 +276,7 @@ _timing: bool = False) -> None:
     doOFF = EL2xx4.from_hex(0x00)
 
     gen.send(None)  # Primi passaggi interni di setup
-    current_out = doON
+    current_out = doOFF
 
     n = 0
     mean = 0.0
@@ -305,7 +305,7 @@ _timing: bool = False) -> None:
                 last_time = current_time
 
                 if n == 0:
-                    current_out = doOFF if current_out == doON else doON
+                    #current_out = doOFF if current_out == doON else doON
                     n += 1
                     continue
 
@@ -330,7 +330,7 @@ _timing: bool = False) -> None:
                         line.append(f" {stats_str}", style="dim")
                     live.update(line)
 
-                current_out = doOFF if current_out == doON else doON
+                #current_out = doOFF if current_out == doON else doON
 
     except KeyboardInterrupt:
         _console.print("[yellow]Test terminato.[/yellow]")
