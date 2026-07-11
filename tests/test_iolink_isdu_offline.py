@@ -70,6 +70,40 @@ def test_assert_product_matches() -> None:
         assert_product_matches(desc, "TotallyOther")
 
 
+def test_assert_product_matches_psd4() -> None:
+    from iolink_sensors.isdu import assert_product_matches
+    from iolink_sensors.loader import load_descriptor
+
+    desc = load_descriptor("psd4")
+    assert_product_matches(desc, "PSD-4")
+    with pytest.raises(ValueError, match="Unexpected product"):
+        assert_product_matches(desc, "TotallyOther")
+
+
+def test_device_check_port() -> None:
+    from iolink_sensors.pf2m7 import Pf2m7Device
+    from iolink_sensors.psd4 import Psd4Device
+
+    pf2_port = _FakeIsduPort({
+        (16, 0): b"SMC" + b"\x00" * 61,
+        (18, 0): b"PF2M771" + b"\x00" * 57,
+    })
+    vendor, product = Pf2m7Device().check_port(pf2_port)
+    assert vendor == "SMC"
+    assert product == "PF2M771"
+
+    psd_port = _FakeIsduPort({
+        (16, 0): b"WIKA" + b"\x00" * 60,
+        (18, 0): b"PSD-4" + b"\x00" * 60,
+    })
+    vendor, product = Psd4Device().check_port(psd_port)
+    assert vendor == "WIKA"
+    assert product == "PSD-4"
+
+    with pytest.raises(ValueError, match="Unexpected product"):
+        Psd4Device().check_port(pf2_port)
+
+
 def test_pf2m7_apply_isdu_read_only() -> None:
     port = _FakeIsduPort({
         (16, 0): b"SMC" + b"\x00" * 61,
@@ -78,10 +112,10 @@ def test_pf2m7_apply_isdu_read_only() -> None:
         (8000, 0): struct.pack("<f", 0.00625),
         (8010, 0): struct.pack("<f", 0.0),
     })
-    dev = Pf2m7Device(flow_range_l=None)
-    profile = dev.apply_isdu(port)
-    assert profile.scaling == pytest.approx(0.00625)
-    assert profile.unit == "L/min"
+    dev = Pf2m7Device()
+    dev.apply_isdu(port)
+    assert dev.scaling == pytest.approx(0.00625)
+    assert dev.unit == "L/min"
     assert port.writes == []
     assert dev.sample(
         pd_raw_s16=1000,
@@ -101,10 +135,10 @@ def test_pf2m7_apply_isdu_with_write() -> None:
         (8000, 0): struct.pack("<f", 0.00625),
         (8010, 0): struct.pack("<f", 0.0),
     })
-    dev = Pf2m7Device(setup=Pf2m7IsduSetup(display_unit=0), flow_range_l=None)
-    profile = dev.apply_isdu(port)
+    dev = Pf2m7Device(setup=Pf2m7IsduSetup(display_unit=0))
+    dev.apply_isdu(port)
     assert port.writes == [(1000, 0, b"\x00")]
-    assert profile.unit == "L/min"
+    assert dev.unit == "L/min"
 
 
 def test_psd4_apply_isdu_with_write() -> None:
@@ -113,12 +147,14 @@ def test_psd4_apply_isdu_with_write() -> None:
         (18, 0): b"PSD4" + b"\x00" * 60,
         (66, 0): b"\x03",
         (67, 0): struct.pack("<f", 0.1),
+        (68, 0): b"\x00\x00",
+        (69, 0): b"\xe8\x03",
         (123, 0): b"\x00",
     })
     dev = Psd4Device(setup=Psd4IsduSetup(unit_process_data=3))
-    profile = dev.apply_isdu(port)
+    dev.apply_isdu(port)
     assert port.writes == [(66, 0, b"\x03")]
-    assert profile.extra["unit_process_data"] == 3
+    assert dev.unit == "kPa"
     assert dev.sample(process_value_raw14=100, ou1=True, ou2=False).value == pytest.approx(10.0)
 
 

@@ -24,13 +24,15 @@ from iolink_sensors.psd4 import Psd4Device, Psd4Sample, Psd4IsduSetup
 from ethercat_lab.el3072 import EL3072, AnalogInputChannel, InputInterface, PdoMode, UserScaleConfig, LimitConfig, RangeErrorConfig, IIRFilter, LimitTriggerType
 from collections.abc import Generator
 from ethercat_lab.pdo import PdoMapEntry, PdoMapping
-
+from ethercat_lab.el1xxx import EL1xx4
+from ethercat_lab.el2xxx import EL2xx4
 from rich.console import Console
 from rich.live import Live
 from rich.text import Text
 from ethercat_lab.beckhoff_device import inspect_pdo_mapping
 if TYPE_CHECKING:
     from ethercat_lab.master import Master
+from ethercat_lab.el6224 import PortStatusError, PortStatusMode, PortStatusFlag
 
 bus: Master  # injected by `eci --macros` before module execution
 
@@ -47,99 +49,58 @@ def read_pdo_mapping(master: Master, slave_idx: int, coe_index: int) -> PdoMappi
     return PdoMapping(index=coe_index, entries=entries)
 
 @dataclass(frozen=True, slots=True)
-class BancoLayout:
-    el1004: int = 2
-    el6224: int = 3
+class ELTerminalLayout:
+    ek1100: int = 1
+    el6224: int = 2
+    el3072: int = 3
     el2004: int = 4
-    el3072: int = 5
-    psd4_port_1: int = 2
-    psd4_port_2: int = 3
+    el1034: int = 5
+    el1004: int = 6
+    psd4_up: int = 2
+    psd4_ve: int = 3
     pf2m7_port: int = 1
-    pf2m7_flow_range_l: int = 25
+    pf2m7_flow_range_l: int = 5
+    potin_port: int = 1
+    current_port: int = 2
 
 
 @dataclass(frozen=True, slots=True)
-class EL2004Sample:
-    o1: bool
-    o2: bool
-    o3: bool
-    o4: bool
-    _codec= bitstruct.compile('p4b1b1b1b1')
-
-    def pack(self) -> bytes:
-        return self._codec.pack(*[bool(v) for v in [self.o1, self.o2, self.o3, self.o4]])
-
-    @classmethod
-    def from_bytes(cls,data:bytes) -> EL2004Sample: 
-        out1, out2, out3, out4= cls._codec.unpack(data)
-        return cls(*[bool(v) for v in [out1, out2, out3, out4]])
-
-    @classmethod
-    def from_hex(cls,value:int) -> EL2004Sample:
-        return cls(*[bool((value>>i)&0x01) for i in range(4)])
-    
-    def to_hex(self) -> int:
-        return sum([v<<i for i, v in enumerate([self.o1, self.o2, self.o3, self.o4])])
-
-    def to_list(self) -> list[bool]:
-        return [self.o1, self.o2, self.o3, self.o4]
-    @classmethod
-    def from_list(cls,values:list[bool]) -> EL2004Sample:
-        return cls(*values)
-
-@dataclass(frozen=True)
-class EL1004Sample:
-    in1: bool
-    in2: bool
-    in3: bool
-    in4: bool
-    _codec= bitstruct.compile('p4b1b1b1b1')
-
-    @classmethod
-    def from_bytes(cls,data:bytes) -> EL1004Sample:
-        in1, in2, in3, in4= cls._codec.unpack(data)
-        return cls(*[bool(v) for v in [in1, in2, in3, in4]])
-
-    def to_list(self) -> list[bool]:
-        return [self.in1, self.in2, self.in3, self.in4]
-
-    def to_hex(self) -> int:
-        return sum([v<<i for i, v in enumerate([self.in1, self.in2, self.in3, self.in4])])
-
-@dataclass(frozen=True, slots=True)
-class EL3072Sample:
+class AnalogInputSample:
     v1: float
     i2: float
 
 @dataclass(slots=True)
-class PdoSnapshot:
-    el1004: EL1004Sample
-    el3072: EL3072Sample
+class DataSnapshot:
+    el2004: EL2xx4
+    el1034: EL1xx4
+    el1004: EL1xx4
+    ain: AnalogInputSample
     psd4_1: Psd4Sample
     psd4_2: Psd4Sample
     pf2m7: Pf2m7Sample
+    iolink_port_statuses: dict[int, tuple[PortStatusError, PortStatusMode, PortStatusFlag]]
 
 class Banco:
-    def __init__(self, master: Master, layout: BancoLayout | None = None) -> None:
+    def __init__(self, master: Master) -> None:
         self.bus = master
-        self.layout = layout or BancoLayout()
+        self.layout = ELTerminalLayout() 
 
         self.io_link = EL6224(master, self.layout.el6224)
-        self.ai = EL3072(master, self.layout.el3072)
-
-        self.psd4_1 = Psd4Device(setup=Psd4IsduSetup())
-        self.psd4_2 = Psd4Device(setup=Psd4IsduSetup())
-        self.pf2m7 = Pf2m7Device(setup=Pf2m7IsduSetup())
-
         self.io_link.set_channel(
-            IoLinkChannelConfig(port=self.layout.psd4_port_1, pd_in=self.psd4_1.pd_in_layout),
+            IoLinkChannelConfig(port=self.layout.psd4_up, pd_in=self.psd4_1.pd_in_layout),
         )
         self.io_link.set_channel(
-            IoLinkChannelConfig(port=self.layout.psd4_port_2, pd_in=self.psd4_2.pd_in_layout),
+            IoLinkChannelConfig(port=self.layout.psd4_ve, pd_in=self.psd4_2.pd_in_layout),
         )
         self.io_link.set_channel(
             IoLinkChannelConfig(port=self.layout.pf2m7_port, pd_in=self.pf2m7.pd_in_layout),
         )
+        self.psd4_1 = Psd4Device(setup=Psd4IsduSetup())
+        self.psd4_2 = Psd4Device(setup=Psd4IsduSetup())
+        self.pf2m7 = Pf2m7Device(setup=Pf2m7IsduSetup())
+        
+        
+        self.ai = EL3072(master, self.layout.el3072)
         # I- CH2 4-20mA
         self.ai.set_channel(AnalogInputChannel(
             port=1,
@@ -162,58 +123,59 @@ class Banco:
             pdo_mode=PdoMode.DEFAULT_REAL32,
         ))
 
-        self.do = self.bus.get_slave(self.layout.el2004)
-        self.do_max_watchdog_timeout = self.do.get_max_watchdog_time()
-        self.di = self.bus.get_slave(self.layout.el1004)
 
+        self.do_max_watchdog_timeout = self.bus.get_slave(self.layout.el2004).get_max_watchdog_time()
+        
     def configure_preop(self) -> None:
         """Un solo PRE-OP: AoE EL6224, poi recipe CoE/PDO di tutti i terminali."""
         self.io_link.configure_preop(aoe_init=True)
         self.ai.configure_preop()
 
-    def read_inputs(self) -> PdoSnapshot:
-        el6224_raw = self.bus.pdoin(self.layout.el6224)
-        el3072_raw = self.bus.pdoin(self.layout.el3072)
+    def pdo_to_data(self) -> DataSnapshot:
+        el2004_raw = self.bus.pdoin(self.layout.el2004)
+        el1034_raw = self.bus.pdoin(self.layout.el1034)
         el1004_raw = self.bus.pdoin(self.layout.el1004)
+        el3072_raw = self.bus.pdoin(self.layout.el6224)
+        el6224_raw = self.bus.pdoin(self.layout.el6224)
         ai_named = self.ai.decode_tx_pdo_named(el3072_raw)
-        iolink_ports = self.io_link.decode_tx_pdo_named(el6224_raw)
-        
-        return PdoSnapshot(
-            el1004=EL1004Sample.from_bytes(el1004_raw),
-            el3072=EL3072Sample(
+        iolink_named = self.io_link.decode_tx_pdo_named(el6224_raw,parse_iolink=True)
+
+        return DataSnapshot(
+            el2004=EL2xx4.from_bytes(el2004_raw),
+            el1034=EL1xx4.from_bytes(el1034_raw),
+            el1004=EL1xx4.from_bytes(el1004_raw),
+            ain=AnalogInputSample(
                 v1=float(ai_named["ch2_DEFAULT_REAL32"]["value_f32"]),
                 i2=float(ai_named["ch1_COMPACT_REAL32"]["value_f32"]),
             ),
-            pf2m7=self.pf2m7.sample(**iolink_ports["ch1_iolink_pd"]),
-            psd4_1=self.psd4_1.sample(**iolink_ports["ch2_iolink_pd"]),
-            psd4_2=self.psd4_2.sample(**iolink_ports["ch3_iolink_pd"]),
+            psd4_1=Psd4Sample(**iolink_named["ch2_iolink_pd"]),
+            psd4_2=Psd4Sample(**iolink_named["ch3_iolink_pd"]),
+            pf2m7=Pf2m7Sample(**iolink_named["ch1_iolink_pd"]),
+            iolink_port_statuses=iolink_named["iolink_port_statuses"],
         )
 
-    def read_pdo_safeop(self, *,repeats: int = 1, sample_period: float = 0.0) -> PdoSnapshot:
+    def read_pdo_safeop(self, *,repeats: int = 1, sample_period: float = 0.0) -> DataSnapshot:
         self.bus.to_safeop()
         for i in range(repeats):
             self.bus.cycle()
             if sample_period and i + 1 < repeats:
                 time.sleep(sample_period)
-        return self.read_inputs()
+        return self.pdo_to_data()
 
     def set_ao_watchdog_timeout(self, timeout: int) -> None:
         if timeout > self.do_max_watchdog_timeout:
             raise ValueError(f"Timeout {timeout} is greater than the maximum watchdog timeout {self.do_max_watchdog_timeout}")
-        self.do.set_watchdog('processdata',timeout)
+        self.bus.get_slave(self.layout.el2004).set_watchdog('processdata',timeout)
 
-    def write_do(self,dosample: EL2004Sample) -> EL2004Sample:
-        current = EL2004Sample.from_bytes(self.do.output)
-        dosample_next = EL2004Sample.from_hex(current.to_hex() | dosample.to_hex())
-        self.do.output = dosample_next.pack()
-        return dosample_next
+    def write_do(self,dosample: EL2xx4) -> None:
+        self.bus.get_slave(self.layout.el2004).output = dosample.pack()
 
     def exchange_pdo_op(
         self,
         sample_period: float,
         repeat: int | None = None,
-        dosample: EL2004Sample = EL2004Sample.from_hex(0x00),
-    ) -> Generator[PdoSnapshot, EL2004Sample, int]:
+        dosample: EL2xx4 = EL2xx4.from_hex(0x00),
+    ) -> Generator[DataSnapshot, EL2xx4, int]:
         
         self.set_ao_watchdog_timeout(int(sample_period * 1500))
         self.read_pdo_safeop()
@@ -228,7 +190,7 @@ class Banco:
             # 1. Scambio dati hardware
             self.write_do(dosample)
             self.bus.cycle()
-            snapshot = self.read_inputs()
+            snapshot = self.pdo_to_data()
             
             if i == 0:
                 break
@@ -273,40 +235,35 @@ def _bool_indicators(values: Sequence[bool | None], *, on: str, off: str) -> Tex
     return t
 
 
-def format_pdo_line(snapshot: PdoSnapshot, do: EL2004Sample) -> Text:
-    di = snapshot.el1004
-    #psd4 = snapshot.psd4
-    pf2m7_sample = snapshot.pf2m7
-    ai_sample = snapshot.el3072
+def format_pdo_line(snapshot: DataSnapshot, do: EL2xx4) -> Text:
     line = Text()
     line.append("TX ", style="bold magenta")
     line.append_text(_bool_indicators(do.to_list(), on="bold green", off="dim"))
     line.append("  RX ", style="bold cyan")
-    line.append("DI ", style="cyan")
-    line.append_text(_bool_indicators([di.in1, di.in2, di.in3, di.in4], on="bold yellow", off="dim"))
-    line.append(f"  AI {ai_sample.v1:+.3f}, overrang", style="blue")
-    line.append(f" {ai_sample.i2:+.3f}", style="blue")
-    line.append(f"  PF2M7 {pf2m7_sample.value:6.3f} {pf2m7_sample.unit}", style="bright_blue")
+    line.append("DI1 ", style="cyan")
+    line.append_text(_bool_indicators([snapshot.el1004.in1, snapshot.el1004.in2, snapshot.el1004.in3, snapshot.el1004.in4], on="bold yellow", off="dim"))
+    line.append("  DI2 ", style="cyan")
+    line.append_text(_bool_indicators([snapshot.el1034.in1, snapshot.el1034.in2, snapshot.el1034.in3, snapshot.el1034.in4], on="bold yellow", off="dim"))
+    line.append("  AI1 ", style="blue")
+    line.append(f" {snapshot.ain.v1:+.3f}, overrang", style="blue")
+    line.append(f" {snapshot.ain.i2:+.3f}", style="blue")
+    line.append("  PSD4_1 ", style="bright_blue")
+    line.append(f" {snapshot.psd4_1.value:6.3f} {snapshot.psd4_1.unit}", style="bright_blue")
+    line.append("  PSD4_2 ", style="bright_blue")
+    line.append(f" {snapshot.psd4_2.value:6.3f} {snapshot.psd4_2.unit}", style="bright_blue")
+    line.append("  PF2M7 ", style="bright_blue")
+    line.append(f" {snapshot.pf2m7.value:6.3f} {snapshot.pf2m7.unit}", style="bright_blue")
     return line
 
-def basic_iolinksensors_pdo_line(snapshot: PdoSnapshot, do: EL2004Sample) -> Text:
-    psd4_1_sample = snapshot.psd4_1
-    psd4_2_sample = snapshot.psd4_2
-    pf2m7_sample = snapshot.pf2m7
-    line = Text()
-    line.append(f"  PSD4_1 {psd4_1_sample.value:6.3f} {psd4_1_sample.unit}", style="bright_blue")
-    line.append(f"  PSD4_2 {psd4_2_sample.value:6.3f} {psd4_2_sample.unit}", style="bright_blue")
-    line.append(f"  PF2M7 {pf2m7_sample.value:6.3f} {pf2m7_sample.unit}", style="bright_blue")
-    return line
 
 def blink_and_print(banco: Banco, 
 sample_period: float,
-_line_formatter: Callable[[PdoSnapshot, EL2004Sample], Text], 
+_line_formatter: Callable[[DataSnapshot, EL2xx4], Text], 
 _timing: bool = False) -> None:
     gen = banco.exchange_pdo_op(sample_period)
 
-    doON = EL2004Sample.from_hex(0x0F)
-    doOFF = EL2004Sample.from_hex(0x00)
+    doON = EL2xx4.from_hex(0x0F)
+    doOFF = EL2xx4.from_hex(0x00)
 
     gen.send(None)  # Primi passaggi interni di setup
     current_out = doON

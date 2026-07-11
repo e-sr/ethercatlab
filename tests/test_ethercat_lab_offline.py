@@ -265,6 +265,26 @@ def test_decode_port_status_byte() -> None:
     assert flags == PortStatusFlag.PD_INVALID
 
 
+def test_iolink_master_state_to_enum() -> None:
+    from unittest.mock import MagicMock
+
+    from ethercat_lab.el6224 import (
+        EL6224,
+        PortStatusError,
+        PortStatusMode,
+        _port_functional,
+    )
+
+    dev = EL6224(MagicMock(), 3, include_device_state=True)
+    states = dev.iolink_master_state_to_enum({
+        "dev_state_ports": {"state_ch1": 0xA0, "state_ch2": 0x03, "state_ch3": 0x03, "state_ch4": 0x00},
+    })
+    assert states[1][0] == PortStatusError.NO_DEVICE
+    assert states[2] == (PortStatusError(0), PortStatusMode.COMM_OP, states[2][2])
+    assert _port_functional(states[2])
+    assert not _port_functional(states[1])
+
+
 def test_el3072_configure_preop_requires_set_channel() -> None:
     import pytest
     from unittest.mock import MagicMock
