@@ -160,7 +160,8 @@ class Banco:
             pf2m7=self.pf2m7.sample(**iolink_named["ch1_iolink_pd"]),
             psd4_1=self.psd4_1.sample(**iolink_named["ch2_iolink_pd"]),
             psd4_2=self.psd4_2.sample(**iolink_named["ch3_iolink_pd"]),
-            iolink_port_statuses=iolink_named["iolink_port_statuses"],
+            iolink_port_statuses=self.io_link.iolink_master_state_to_enum(iolink_named["dev_state_ports"]),
+            
         )
 
     def read_pdo_safeop(self, *,repeats: int = 1, sample_period: float = 0.0) -> InputDataSnapshot:
