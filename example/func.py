@@ -70,8 +70,7 @@ class AnalogInputSample:
     i2: float
 
 @dataclass(slots=True)
-class DataSnapshot:
-    el2004: EL2xx4
+class InputDataSnapshot:
     el1034: EL1xx4
     el1004: EL1xx4
     ain: AnalogInputSample
@@ -89,7 +88,7 @@ class Banco:
         self.psd4_1 = Psd4Device(setup=Psd4IsduSetup())
         self.psd4_2 = Psd4Device(setup=Psd4IsduSetup())
         self.pf2m7 = Pf2m7Device(setup=Pf2m7IsduSetup())
-        
+
         self.io_link.set_channel(
             IoLinkChannelConfig(port=self.layout.psd4_up, pd_in=self.psd4_1.pd_in_layout),
         )
@@ -132,8 +131,7 @@ class Banco:
         self.io_link.configure_preop(aoe_init=True)
         self.ai.configure_preop()
 
-    def pdo_to_data(self) -> DataSnapshot:
-        el2004_raw = self.bus.pdoin(self.layout.el2004)
+    def pdo_to_data(self) -> InputDataSnapshot:
         el1034_raw = self.bus.pdoin(self.layout.el1034)
         el1004_raw = self.bus.pdoin(self.layout.el1004)
         el3072_raw = self.bus.pdoin(self.layout.el6224)
@@ -141,8 +139,7 @@ class Banco:
         ai_named = self.ai.decode_tx_pdo_named(el3072_raw)
         iolink_named = self.io_link.decode_tx_pdo_named(el6224_raw,parse_iolink=True)
 
-        return DataSnapshot(
-            el2004=EL2xx4.from_bytes(el2004_raw),
+        return InputDataSnapshot(
             el1034=EL1xx4.from_bytes(el1034_raw),
             el1004=EL1xx4.from_bytes(el1004_raw),
             ain=AnalogInputSample(
@@ -176,7 +173,7 @@ class Banco:
         sample_period: float,
         repeat: int | None = None,
         dosample: EL2xx4 = EL2xx4.from_hex(0x00),
-    ) -> Generator[DataSnapshot, EL2xx4, int]:
+    ) -> Generator[InputDataSnapshot, EL2xx4, int]:
         
         self.set_ao_watchdog_timeout(int(sample_period * 1500))
         self.read_pdo_safeop()
@@ -236,7 +233,7 @@ def _bool_indicators(values: Sequence[bool | None], *, on: str, off: str) -> Tex
     return t
 
 
-def format_pdo_line(snapshot: DataSnapshot, do: EL2xx4) -> Text:
+def format_pdo_line(snapshot: InputDataSnapshot, do: EL2xx4) -> Text:
     line = Text()
     line.append("TX ", style="bold magenta")
     line.append_text(_bool_indicators(do.to_list(), on="bold green", off="dim"))
@@ -259,7 +256,7 @@ def format_pdo_line(snapshot: DataSnapshot, do: EL2xx4) -> Text:
 
 def blink_and_print(banco: Banco, 
 sample_period: float,
-_line_formatter: Callable[[DataSnapshot, EL2xx4], Text], 
+_line_formatter: Callable[[InputDataSnapshot, EL2xx4], Text], 
 _timing: bool = False) -> None:
     gen = banco.exchange_pdo_op(sample_period)
 
