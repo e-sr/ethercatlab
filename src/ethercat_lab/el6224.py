@@ -312,11 +312,11 @@ class EL6224(BeckhoffDevice):
         return self.expected_tx_pdo_byte_len()
 
     def iolink_master_state_to_enum(
-        self, dev_state_ports: dict[str, int],,
+        self, dev_state_ports: dict[str, int]
     ) -> dict[int, tuple[PortStatusError, PortStatusMode, PortStatusFlag]]:
         """Decode F100 ``dev_state_ports`` bytes to port -> (errors, mode, flags)."""
         out: dict[int, tuple[PortStatusError, PortStatusMode, PortStatusFlag]] = {}
-        for key, value in pdo_decoded["dev_state_ports"].items():
+        for key, value in dev_state_ports.items():
             if key.startswith("state_ch"):
                 out[int(key.removeprefix("state_ch"))] = decode_port_status_byte(int(value))
         return out
