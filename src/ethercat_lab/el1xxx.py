@@ -1,7 +1,9 @@
 import bitstruct
 from dataclasses import dataclass
+from typing import Self
+from __future__ import annotations
 
-@dataclass(frozen=True)
+@dataclass(frozen=True,)
 class EL1xx4:
     in1: bool
     in2: bool
@@ -10,7 +12,7 @@ class EL1xx4:
     _codec= bitstruct.compile('p4b1b1b1b1')
 
     @classmethod
-    def from_bytes(cls,data:bytes) -> EL1xx4:
+    def from_bytes(cls,data:bytes) -> Self:
         in1, in2, in3, in4= cls._codec.unpack(data)
         return cls(*[bool(v) for v in [in1, in2, in3, in4]])
 

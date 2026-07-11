@@ -1,6 +1,7 @@
 import bitstruct
 from dataclasses import dataclass
-
+from __future__ import annotations
+from typing import Self
 @dataclass(frozen=True, slots=True)
 class EL2xx4:
     o1: bool
@@ -13,11 +14,11 @@ class EL2xx4:
         return self._codec.pack(*[bool(v) for v in [self.o1, self.o2, self.o3, self.o4]])
 
     @classmethod
-    def from_bytes(cls,data:bytes) -> EL2xx4: 
+    def from_bytes(cls,data:bytes) -> Self: 
         out1, out2, out3, out4= cls._codec.unpack(data)
         return cls(*[bool(v) for v in [out1, out2, out3, out4]])
     @classmethod
-    def from_hex(cls,value:int) -> EL2xx4:
+    def from_hex(cls,value:int) -> Self:
         return cls(*[bool((value>>i)&0x01) for i in range(4)])
     
     def to_hex(self) -> int:
