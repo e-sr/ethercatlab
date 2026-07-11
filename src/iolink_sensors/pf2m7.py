@@ -23,6 +23,8 @@ class Pf2m7IsduSetup:
 class Pf2m7Sample:
     value: float
     unit: str
+    out1: bool
+    out2: bool
     flags: dict[str, Any]
 
 

@@ -74,10 +74,21 @@ class InputDataSnapshot:
     el1034: EL1xx4
     el1004: EL1xx4
     ain: AnalogInputSample
+    pf2m7: Pf2m7Sample
     psd4_1: Psd4Sample
     psd4_2: Psd4Sample
-    pf2m7: Pf2m7Sample
     iolink_port_statuses: dict[int, tuple[PortStatusError, PortStatusMode, PortStatusFlag]]
+    def __repr__(self) -> str:
+        #multiline print
+        return f"""
+        EL1034: {self.el1034.to_hex()}
+        EL1004: {self.el1004.to_hex()}
+        AIN: {self.ain.v1:+.3f}, {self.ain.i2:+.3f}
+        PF2M7: {self.pf2m7.value:6.3f} {self.pf2m7.unit}, out1: {self.pf2m7.out1}, out2: {self.pf2m7.out2}
+        PSD4_1: {self.psd4_1.value:6.3f} {self.psd4_1.unit}, out1: {self.psd4_1.out1}, out2: {self.psd4_1.out2}
+        PSD4_2: {self.psd4_2.value:6.3f} {self.psd4_2.unit}, out1: {self.psd4_2.out1}, out2: {self.psd4_2.out2}
+        IOLink port statuses: {self.iolink_port_statuses}
+        """
 
 class Banco:
     def __init__(self, master: Master) -> None:
@@ -146,13 +157,13 @@ class Banco:
                 v1=float(ai_named["ch2_DEFAULT_REAL32"]["value_f32"]),
                 i2=float(ai_named["ch1_COMPACT_REAL32"]["value_f32"]),
             ),
-            psd4_1=Psd4Sample(**iolink_named["ch2_iolink_pd"]),
-            psd4_2=Psd4Sample(**iolink_named["ch3_iolink_pd"]),
-            pf2m7=Pf2m7Sample(**iolink_named["ch1_iolink_pd"]),
+            pf2m7=self.pf2m7.sample(**iolink_named["ch1_iolink_pd"]),
+            psd4_1=self.psd4_1.sample(**iolink_named["ch2_iolink_pd"]),
+            psd4_2=self.psd4_2.sample(**iolink_named["ch3_iolink_pd"]),
             iolink_port_statuses=iolink_named["iolink_port_statuses"],
         )
 
-    def read_pdo_safeop(self, *,repeats: int = 1, sample_period: float = 0.0) -> DataSnapshot:
+    def read_pdo_safeop(self, *,repeats: int = 1, sample_period: float = 0.0) -> InputDataSnapshot:
         self.bus.to_safeop()
         for i in range(repeats):
             self.bus.cycle()
