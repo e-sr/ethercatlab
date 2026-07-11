@@ -86,6 +86,10 @@ class Banco:
         self.layout = ELTerminalLayout() 
 
         self.io_link = EL6224(master, self.layout.el6224)
+        self.psd4_1 = Psd4Device(setup=Psd4IsduSetup())
+        self.psd4_2 = Psd4Device(setup=Psd4IsduSetup())
+        self.pf2m7 = Pf2m7Device(setup=Pf2m7IsduSetup())
+        
         self.io_link.set_channel(
             IoLinkChannelConfig(port=self.layout.psd4_up, pd_in=self.psd4_1.pd_in_layout),
         )
@@ -95,9 +99,6 @@ class Banco:
         self.io_link.set_channel(
             IoLinkChannelConfig(port=self.layout.pf2m7_port, pd_in=self.pf2m7.pd_in_layout),
         )
-        self.psd4_1 = Psd4Device(setup=Psd4IsduSetup())
-        self.psd4_2 = Psd4Device(setup=Psd4IsduSetup())
-        self.pf2m7 = Pf2m7Device(setup=Pf2m7IsduSetup())
         
         
         self.ai = EL3072(master, self.layout.el3072)
