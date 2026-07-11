@@ -71,11 +71,11 @@ class Pf2m7Device(DeviceBase):
         return Pf2m7Sample(
             value=float(process_value) * self._scaling + self._offset,
             unit=self._unit,
+            out1=out1,
+            out2=out2,
             flags={
                 "error_diag": error_diag,
                 "fixed_output": fixed_output,
                 "meas_diag": meas_diag,
-                "out1": out1,
-                "out2": out2,
             },
         )
