@@ -1,7 +1,7 @@
+from __future__ import annotations
 import bitstruct
 from dataclasses import dataclass
 from typing import Self
-from __future__ import annotations
 
 @dataclass(frozen=True,)
 class EL1xx4:

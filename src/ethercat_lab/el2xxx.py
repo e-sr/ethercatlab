@@ -1,6 +1,6 @@
+from __future__ import annotations
 import bitstruct
 from dataclasses import dataclass
-from __future__ import annotations
 from typing import Self
 @dataclass(frozen=True, slots=True)
 class EL2xx4:
