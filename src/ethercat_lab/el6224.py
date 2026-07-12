@@ -16,6 +16,7 @@ from enum import IntEnum, IntFlag
 from typing import TYPE_CHECKING, Any, NoReturn
 
 import pysoem
+from pysoem import State
 
 from iolink_sensors.models import  PdWireLayout
 
@@ -322,7 +323,7 @@ class EL6224(BeckhoffDevice):
         return out
 
     @property
-    def port_statuses_F100(
+    def iolink_master_status_F100(
         self) -> dict[int, tuple[PortStatusError, PortStatusMode, PortStatusFlag]]:
         """F100 port status: PDO in SAFE-OP/OP, CoE ``0xF100:0n`` in PRE-OP."""
         out: dict[int, tuple[PortStatusError, PortStatusMode, PortStatusFlag]] = {}
@@ -335,17 +336,12 @@ class EL6224(BeckhoffDevice):
     def iolink_master_active(self, port: int) -> bool:
         """True if F100 reports COMM_OP with no error nibble."""
         _validate_port(port)
-        status = self.port_statuses_F100.get(port)
+        status = self.iolink_master_status_F100.get(port)
         return status is not None and _port_functional(status)
 
     def get_isdu_channel(self, port: int) -> IOLinkIsduChannel:
         if port not in self._channels:
             raise ValueError(f"Port {port} not found in channels")
-        status = self.port_statuses_F100.get(port)
-        if status is None:
-            raise RuntimeError(f"IO-Link port {port}: no F100 status")
-        if not _port_functional(status):
-            raise RuntimeError(f"IO-Link port {port} not functional: mode={status[1].name} error={status[0].name}")
         return IOLinkIsduChannel(iolinkmaster=self, port=port)
 
     def configure_preop(self, *, aoe_init: bool = True) -> None:
@@ -404,7 +400,7 @@ class IOLinkIsduChannel:
         if state not in (pysoem.SAFEOP_STATE, pysoem.OP_STATE):
             raise RuntimeError(
                 f"ISDU requires SAFE-OP or OP, bus is "
-                f"{self._iolinkmaster._bus.state_to_str(state)}"
+                f"{State(state)!s}"
             )
 
     def read_isdu(

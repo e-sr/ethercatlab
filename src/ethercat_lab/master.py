@@ -3,9 +3,9 @@ from __future__ import annotations
 import logging
 from collections.abc import Sequence
 from dataclasses import dataclass
-from sys import settrace
 from typing import Any, Callable
 import pysoem
+from pysoem import State
 
 from .aoe import (
     AOE_TIMEOUT_US, COE_SLAVE_NETID_INDEX, COE_SLAVE_NETID_SUB,
@@ -42,7 +42,6 @@ def format_coe_exc(exc: BaseException) -> str:
 
 def format_coe_payload(raw: bytes | bytearray) -> str:
     return " ".join(f"{byte:02x}" for byte in bytes(raw))
-
 
 @dataclass(slots=True)
 class CoeTransfer:
@@ -104,13 +103,19 @@ class Master:
             self.initialized = True
             return self
 
+    def _current_state(self, *, refresh: bool = False) -> State:
+        self._require_initialized()
+        if refresh:
+            self.master.read_state()
+        return State(self.master.state)
+
     @property
-    def state(self) -> int:
-        return self.master.state
+    def state(self) -> State:
+        return self._current_state()
 
     @property
     def state_str(self) -> str:
-        return Master.state_to_str(self.master.state)
+        return str(self.state)
 
     def _require_initialized(self) -> None:
         if not self.initialized:
@@ -235,14 +240,13 @@ class Master:
     def _ensure_mailbox_aoe_state(self) -> None:
         """AoE read/write needs SAFE-OP or OP; EL6224 fails in PRE-OP (runtime-tested)."""
         self._require_initialized()
-        state = self.master.state
-        if state in (pysoem.SAFEOP_STATE, pysoem.OP_STATE):
+        if self.state in (State.SAFEOP, State.OP):
             return
-        if state == pysoem.PREOP_STATE:
+        if self.state == State.PREOP:
             self.to_safeop()
             return
         raise RuntimeError(
-            f"AoE transfer requires SAFE-OP or OP, bus is {self.state_to_str(state)}"
+            f"AoE transfer requires SAFE-OP or OP, bus is {self.state_str}"
         )
 
     def _aoe_route(self, slave_idx: int, target_port: int) -> tuple[bytes, bytes, int, int]:
@@ -365,85 +369,75 @@ class Master:
         self.master.config_map()
 
     def to_preop(self, func: Callable[[], Any] | None = None) -> bool:
+        """Return True if the bus transitioned to PRE-OP, False if already there."""
         self._require_initialized()
-        self.master.read_state()
-        prev = self.master.state
-        if prev < pysoem.INIT_STATE:
+        prev = self._current_state(refresh=True)
+        if prev < State.INIT:
             raise RuntimeError(
-                f"Cannot transition to PRE-OP from {self.state_to_str(prev)}"
+                f"Cannot transition to PRE-OP from {prev!s}"
             )
-        if prev == pysoem.PREOP_STATE:
+        if prev == State.PREOP:
             if func is not None:
                 func()
             return False
-        from_above = prev > pysoem.PREOP_STATE
-        self._set_bus_state(pysoem.PREOP_STATE)
+        from_above = prev > State.PREOP
+        changed = self._set_bus_state(State.PREOP)
         if from_above:
             self._on_enter_preop()
         if func is not None:
             func()
-        return True
+        return changed
 
     def to_safeop(self) -> bool:
+        """Return True if the bus transitioned to SAFE-OP, False if already SAFE-OP or OP."""
         self._require_initialized()
-        self.master.read_state()
-        state = self.master.state
-        if state in (pysoem.SAFEOP_STATE, pysoem.OP_STATE):
+        prev = self._current_state(refresh=True)
+        if prev in (State.SAFEOP, State.OP):
             return False
-        if state != pysoem.PREOP_STATE:
+        if prev != State.PREOP:
             raise RuntimeError(
-                f"Cannot transition to SAFE-OP from {self.state_to_str(state)}"
+                f"Cannot transition to SAFE-OP from {self.state_str}"
             )
         self._on_exit_preop()
-        return self._set_bus_state(pysoem.SAFEOP_STATE)
+        return self._set_bus_state(State.SAFEOP)
 
     def to_init(self) -> bool:
+        """Return True if the bus transitioned to INIT, False if already there."""
         self._require_initialized()
-        return self._set_bus_state(pysoem.INIT_STATE)
+        return self._set_bus_state(State.INIT)
 
     def to_op(self) -> bool:
+        """Return True if the bus transitioned to OP, False if already there."""
         self._require_initialized()
-        self.master.read_state()
-        state = self.master.state
-        if state == pysoem.OP_STATE:
+        prev = self._current_state(refresh=True)
+        if prev == State.OP:
             return False
-        if state != pysoem.SAFEOP_STATE:
+        if prev != State.SAFEOP:
             raise RuntimeError(
-                f"Cannot transition to OP from {self.state_to_str(state)}"
+                f"Cannot transition to OP from {self.state_str}"
             )
         self.cycle()
-        return self._set_bus_state(pysoem.OP_STATE)
+        return self._set_bus_state(State.OP)
 
-    def set_bus_state(self, target_state: int, timeout_us: int = 100000) -> bool:
+    def set_bus_state(self, target_state: State, timeout_us: int = 100000) -> bool:
         """Pure AL transition (no PreOP entry/exit actions). Prefer to_* methods."""
         self._require_initialized()
         return self._set_bus_state(target_state, timeout_us=timeout_us)
 
-    def _set_bus_state(self, target_state: int, timeout_us: int = 100000) -> bool:
+    def _set_bus_state(self, target_state: State, timeout_us: int = 100000) -> bool:
+        """Apply AL state; return False if already there, True on success, raise on failure."""
         self.master.read_state()
-        if self.master.state == target_state:
+        target = int(target_state)
+        if self.master.state == target:
             return False
-        self.master.state = target_state
+        self.master.state = target
         self.master.write_state()
         self.master.read_state()
-        reached = self.master.state_check(target_state, timeout_us)
-        if reached != target_state:
+        reached = self.master.state_check(target, timeout_us)
+        if reached != target:
             raise RuntimeError(
-                f"Failed state transition target={self.state_to_str(target_state)} "
-                f"reached={self.state_to_str(reached)}"
+                f"Failed state transition target={State(target)!s} "
+                f"reached={State(reached)!s}"
             )
         return True
-    
-    @staticmethod
-    def state_to_str(state: int) -> str:
-        states = []
-        if state & pysoem.INIT_STATE:
-            states.append("INIT")
-        if state & pysoem.PREOP_STATE:
-            states.append("PRE-OP")
-        if state & pysoem.SAFEOP_STATE:
-            states.append("SAFE-OP")
-        if state & pysoem.OP_STATE:
-            states.append("OP")
-        return "|".join(states) if states else f"UNKNOWN({state})"
 

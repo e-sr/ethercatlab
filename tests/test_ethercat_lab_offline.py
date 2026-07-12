@@ -606,3 +606,17 @@ def test_to_preop_already_preop_runs_hook_no_entry() -> None:
     bus._on_enter_preop = lambda: flags.append("enter")  # type: ignore[method-assign]
     assert bus.to_preop(lambda: flags.append("hook")) is False
     assert flags == ["hook"]
+
+
+def test_set_bus_state_raises_when_not_reached() -> None:
+    import pytest
+    import pysoem
+
+    bus = _state_bus(pysoem.PREOP_STATE)
+
+    def _fail_state_check(_target: int, _timeout: int) -> int:
+        return pysoem.PREOP_STATE
+
+    bus.master.state_check = _fail_state_check  # type: ignore[method-assign]
+    with pytest.raises(RuntimeError, match="Failed state transition"):
+        bus.to_safeop()

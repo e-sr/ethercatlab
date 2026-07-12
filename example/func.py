@@ -28,6 +28,7 @@ from ethercat_lab.el1xxx import EL1xx4
 from ethercat_lab.el2xxx import EL2xx4
 from rich.console import Console
 from rich.live import Live
+from ethercat_lab.master import State
 from rich.text import Text
 from ethercat_lab.beckhoff_device import inspect_pdo_mapping
 if TYPE_CHECKING:
@@ -56,13 +57,32 @@ class ELTerminalLayout:
     el2004: int = 4
     el1034: int = 5
     el1004: int = 6
-    psd4_up: int = 2
-    psd4_ve: int = 3
-    pf2m7_port: int = 1
-    pf2m7_flow_range_l: int = 5
-    potin_port: int = 1
-    current_port: int = 2
-
+    iolinksensors = [
+        Pf2m7Device(setup=Pf2m7IsduSetup()),
+        Psd4Device(setup=Psd4IsduSetup()),
+        Psd4Device(setup=Psd4IsduSetup())
+        ]
+    analog_inputs = [
+        AnalogInputChannel(
+            port=1,
+            input_interface=InputInterface.I_4_20MA,
+            user_scale= UserScaleConfig.physical(gain=1000.0, offset=-4.0),
+            limits=LimitConfig(limit1=4.0, limit2=8.0),
+            range_error=RangeErrorConfig(low=1.0, high=5.0),
+            iir_filter=IIRFilter.IIR21Hz,
+            pdo_mode=PdoMode.COMPACT_REAL32,
+            cycle_counters=True
+        ),
+        AnalogInputChannel(
+            port=2,
+            input_interface=InputInterface.V_0_10,
+            user_scale=UserScaleConfig.physical(gain=2.0, offset=0.0),
+            limits=LimitConfig(limit1=2.0, limit2=4.0),
+            range_error=RangeErrorConfig(low=2.0, high=17.0),
+            iir_filter=IIRFilter.IIR21Hz,
+            pdo_mode=PdoMode.DEFAULT_REAL32,
+        )
+    ]
 
 @dataclass(frozen=True, slots=True)
 class AnalogInputSample:
@@ -96,51 +116,32 @@ class Banco:
         self.layout = ELTerminalLayout() 
 
         self.io_link = EL6224(master, self.layout.el6224)
-        self.psd4_1 = Psd4Device(setup=Psd4IsduSetup())
-        self.psd4_2 = Psd4Device(setup=Psd4IsduSetup())
-        self.pf2m7 = Pf2m7Device(setup=Pf2m7IsduSetup())
+        self.iolinksensors = self.layout.iolinksensors
 
-        self.io_link.set_channel(
-            IoLinkChannelConfig(port=self.layout.psd4_up, pd_in=self.psd4_1.pd_in_layout),
-        )
-        self.io_link.set_channel(
-            IoLinkChannelConfig(port=self.layout.psd4_ve, pd_in=self.psd4_2.pd_in_layout),
-        )
-        self.io_link.set_channel(
-            IoLinkChannelConfig(port=self.layout.pf2m7_port, pd_in=self.pf2m7.pd_in_layout),
-        )
-        
-        
+        for i, sensor in enumerate(self.iolinksensors):
+            self.io_link.set_channel(
+                IoLinkChannelConfig(port=i + 1, pd_in=sensor.pd_in_layout),
+            )    
+
         self.ai = EL3072(master, self.layout.el3072)
         # I- CH2 4-20mA
-        self.ai.set_channel(AnalogInputChannel(
-            port=1,
-            input_interface=InputInterface.I_4_20MA,
-            user_scale= UserScaleConfig.physical(gain=1000.0, offset=-4.0),
-            limits=LimitConfig(limit1=4.0, limit2=8.0),
-            range_error=RangeErrorConfig(low=1.0, high=5.0),
-            iir_filter=IIRFilter.IIR21Hz,
-            pdo_mode=PdoMode.COMPACT_REAL32,
-            cycle_counters=True
-        ))
-        # V+ CH1 potenziometro Voltaggio
-        self.ai.set_channel(AnalogInputChannel(
-            port=2,
-            input_interface=InputInterface.V_0_10,
-            user_scale=UserScaleConfig.physical(gain=2.0, offset=0.0),
-            limits=LimitConfig(limit1=2.0, limit2=4.0),
-            range_error=RangeErrorConfig(low=2.0, high=17.0),
-            iir_filter=IIRFilter.IIR21Hz,
-            pdo_mode=PdoMode.DEFAULT_REAL32,
-        ))
-
-
+        self.analog_inputs = self.layout.analog_inputs
+        for i, channel in enumerate(self.analog_inputs):
+            self.ai.set_channel(channel)
         self.do_max_watchdog_timeout = self.bus.get_slave(self.layout.el2004).get_max_watchdog_time()
         
     def configure_preop(self) -> None:
         """Un solo PRE-OP: AoE EL6224, poi recipe CoE/PDO di tutti i terminali."""
         self.io_link.configure_preop(aoe_init=True)
         self.ai.configure_preop()
+
+    def configure_safeop(self) -> None:
+        #check bus state
+        if self.bus.state != State.SAFEOP:
+            raise ValueError("Bus is not in safeop mode")
+        for port,sensor in zip(self.io_link.channels, self.iolinksensors):
+            isdu_channel = self.io_link.get_isdu_channel(port.port)
+            sensor.apply_isdu(isdu_channel)
 
     def pdo_to_data(self) -> InputDataSnapshot:
         el1034_raw = self.bus.pdoin(self.layout.el1034)

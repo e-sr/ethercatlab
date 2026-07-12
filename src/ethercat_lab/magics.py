@@ -9,6 +9,8 @@ from rich.console import Console
 from rich.table import Table
 from IPython.display import display
 
+from pysoem import State
+
 from .master import CoeTransfer, Master
 from .coe import CoEEntry, CoeObject, format_coe_value
 
@@ -172,10 +174,10 @@ class EtherMagics(Magics):
         args = parse_argstring(self.ec_slaves, line)
         if args.slaveindex is None:
             for pos, s in enumerate(self.bus.master.slaves, start=1):
-                print(f"Slave {pos}: {s.name}  adr=0x{s.configadr:x}  {self.bus.state_to_str(s.state)}")
+                print(f"Slave {pos}: {s.name}  adr=0x{s.configadr:x}  {State(s.state)!s}")
         else:
             s = self.bus.get_slave(args.slaveindex)
-            print(f"Slave {args.slaveindex}: {s.name}  adr=0x{s.configadr:x}  {self.bus.state_to_str(s.state)}")
+            print(f"Slave {args.slaveindex}: {s.name}  adr=0x{s.configadr:x}  {State(s.state)!s}")
 
     @magic_arguments()
     @argument("slaveindex", type=_int)
