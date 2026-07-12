@@ -339,4 +339,3 @@ _timing: bool = False) -> None:
 
 banco = Banco(bus)
 el6224 = banco.io_link
-banco.configure_preop()
