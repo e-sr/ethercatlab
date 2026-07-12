@@ -158,9 +158,9 @@ class Banco:
                 v1=float(ai_named["ch2_DEFAULT_REAL32"]["value_f32"]),
                 i2=float(ai_named["ch1_COMPACT_REAL32"]["value_f32"]),
             ),
-            pf2m7=self.pf2m7.sample(**iolink_named["ch1_iolink_pd"]),
-            psd4_1=self.psd4_1.sample(**iolink_named["ch2_iolink_pd"]),
-            psd4_2=self.psd4_2.sample(**iolink_named["ch3_iolink_pd"]),
+            pf2m7=self.iolinksensors[0].sample(**iolink_named["ch1_iolink_pd"]),
+            psd4_1=self.iolinksensors[1].sample(**iolink_named["ch2_iolink_pd"]),
+            psd4_2=self.iolinksensors[2].sample(**iolink_named["ch3_iolink_pd"]),
             iolink_port_statuses=self.io_link.iolink_master_state_to_enum(iolink_named["dev_state_ports"]),
             
         )
