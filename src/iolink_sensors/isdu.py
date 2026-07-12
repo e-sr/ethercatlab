@@ -38,26 +38,24 @@ def _require_writable(reg: RegisterSpec, name: str) -> None:
 
 
 def read_register(
-    port: IsduPort, descriptor: SensorDescriptor, name: str, *, size: int | None = None,
+    port: IsduPort, reg: RegisterSpec, name: str, *, size: int | None = None,
 ) -> bytes:
-    reg = descriptor.registers[name]
     n = register_byte_size(reg) if size is None else size
     return port.read_isdu(reg.index, reg.subindex, size=n)
 
 
 def read_text_register(
     port: IsduPort,
-    descriptor: SensorDescriptor,
+    reg: RegisterSpec,
     name: str,
     *,
     max_bytes: int = 32,
 ) -> str:
     """Read IO-Link string register; cap length for EL6224 single ISDU frame."""
-    reg = descriptor.registers[name]
     if not reg.format.startswith("t"):
         raise ValueError(f"{name!r} is not a text register")
     n = min(register_byte_size(reg), max_bytes)
-    raw = read_register(port, descriptor, name, size=n)
+    raw = read_register(port, reg, name, size=n)
     return decode_register_value(reg, raw.ljust(register_byte_size(reg), b"\x00"))
 
 
@@ -89,15 +87,16 @@ def encode_register_value(reg: RegisterSpec, value: Any) -> bytes:
     return packed
 
 
-def read_decoded_register(port: IsduPort, descriptor: SensorDescriptor, name: str) -> Any:
-    reg = descriptor.registers[name]
-    return decode_register_value(reg, read_register(port, descriptor, name))
+def read_decoded_register(port: IsduPort, reg: RegisterSpec, name: str) -> Any:
+    return decode_register_value(reg, read_register(port, reg, name))
 
+def write_register(port: IsduPort, reg: RegisterSpec, name: str, value: bytes) -> None:
+    _require_writable(reg, name)
+    port.write_isdu(reg.index, value, reg.subindex)
 
-def write_decoded_register(
-    port: IsduPort, descriptor: SensorDescriptor, name: str, value: Any,
+def write_encoded_register(
+    port: IsduPort, reg: RegisterSpec, name: str, value: Any,
 ) -> None:
-    reg = descriptor.registers[name]
     _require_writable(reg, name)
     port.write_isdu(reg.index, encode_register_value(reg, value), reg.subindex)
 
@@ -106,16 +105,16 @@ def apply_isdu_writes(
     port: IsduPort, descriptor: SensorDescriptor, writes: dict[str, Any],
 ) -> None:
     for name, value in writes.items():
-        write_decoded_register(port, descriptor, name, value)
+        write_decoded_register(port, descriptor.registers[name], name, value)
 
 
 def read_identity(
     port: IsduPort, descriptor: SensorDescriptor, *, max_text_bytes: int = 32,
 ) -> tuple[str, str]:
     """Product name first (validation); vendor best-effort."""
-    product = read_text_register(port, descriptor, "product_name", max_bytes=max_text_bytes)
+    product = read_text_register(port, descriptor.registers["product_name"], "product_name", max_bytes=max_text_bytes)
     try:
-        vendor = read_text_register(port, descriptor, "vendor_name", max_bytes=max_text_bytes)
+        vendor = read_text_register(port, descriptor.registers["vendor_name"], "vendor_name", max_bytes=max_text_bytes)
     except Exception:
         vendor = "?"
     return vendor, product
