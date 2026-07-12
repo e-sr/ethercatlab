@@ -291,28 +291,30 @@ class AnalogInputChannel:
             writes.extend([
                 CoeTransfer(self.settings_index, _SUB_0X8000_ENABLE_LIMIT1, raw=b"\x01"),
                 CoeTransfer(self.settings_index, _SUB_0X8000_ENABLE_LIMIT2, raw=b"\x01"),
-                CoeTransfer(
-                    self.advanced_index,
-                    _SUB_0X800D_LIMIT_1_F32,
-                    raw=struct.pack("<f", lim.limit1),
-                ),
+                # Write upper threshold first: device validates min/max on each SDO.
                 CoeTransfer(
                     self.advanced_index,
                     _SUB_0X800D_LIMIT_2_F32,
                     raw=struct.pack("<f", lim.limit2),
                 ),
+                CoeTransfer(
+                    self.advanced_index,
+                    _SUB_0X800D_LIMIT_1_F32,
+                    raw=struct.pack("<f", lim.limit1),
+                ),
             ])
         if self.range_error is not None:
+            re = self.range_error
             writes.extend([
                 CoeTransfer(
                     self.advanced_index,
-                    _SUB_0X800D_LOW_RANGE_ERROR_F32,
-                    raw=struct.pack("<f", self.range_error.low),
+                    _SUB_0X800D_HIGH_RANGE_ERROR_F32,
+                    raw=struct.pack("<f", re.high),
                 ),
                 CoeTransfer(
                     self.advanced_index,
-                    _SUB_0X800D_HIGH_RANGE_ERROR_F32,
-                    raw=struct.pack("<f", self.range_error.high),
+                    _SUB_0X800D_LOW_RANGE_ERROR_F32,
+                    raw=struct.pack("<f", re.low),
                 ),
             ])
         return writes
@@ -359,86 +361,6 @@ class EL3072(BeckhoffDevice):
         if not self._channels:
             raise ValueError("No channels registered; call set_channel() first")
         self.refresh_pdo_assignments()
-        # #region agent log
-        import json
-        import struct
-        import time
-        from pathlib import Path
-
-        _log_path = Path(__file__).resolve().parents[2] / ".cursor" / "debug-3f1c65.log"
-
-        def _dbg(hypothesis_id: str, message: str, data: dict) -> None:
-            payload = {
-                "sessionId": "3f1c65",
-                "hypothesisId": hypothesis_id,
-                "location": "el3072.py:configure_preop",
-                "message": message,
-                "data": data,
-                "timestamp": int(time.time() * 1000),
-            }
-            with _log_path.open("a", encoding="utf-8") as fh:
-                fh.write(json.dumps(payload) + "\n")
-
-        for ch in self.channels:
-            adv = ch.advanced_index
-            for sub, label in (
-                (0x27, "range_error_low"),
-                (0x28, "range_error_high"),
-                (0x29, "limit1"),
-                (0x2A, "limit2"),
-                (0x1C, "user_scale_offset"),
-                (0x1D, "user_scale_gain"),
-            ):
-                t = self._bus.read_coe(self.slave_idx, adv, sub)
-                raw = t.raw
-                f32_le = struct.unpack("<f", raw[:4])[0] if raw and len(raw) >= 4 else None
-                f32_be = struct.unpack(">f", raw[:4])[0] if raw and len(raw) >= 4 else None
-                _dbg(
-                    "A",
-                    "device value before CoE writes",
-                    {
-                        "slave": self.slave_idx,
-                        "port": ch.port,
-                        "index": f"0x{adv:04x}",
-                        "subindex": sub,
-                        "label": label,
-                        "raw_hex": raw.hex() if raw else None,
-                        "f32_le": f32_le,
-                        "f32_be": f32_be,
-                        "read_error": t.error,
-                    },
-                )
-            for i, w in enumerate(ch.settings_writes()):
-                f32 = (
-                    struct.unpack("<f", w.raw[:4])[0]
-                    if w.raw and len(w.raw) >= 4 and w.subindex >= 0x1C
-                    else None
-                )
-                _dbg(
-                    "B",
-                    "planned CoE write",
-                    {
-                        "order": i,
-                        "port": ch.port,
-                        "index": f"0x{w.index:04x}",
-                        "subindex": w.subindex,
-                        "raw_hex": w.raw.hex() if w.raw else None,
-                        "f32_le": f32,
-                        "input_interface": int(ch.input_interface),
-                        "user_scale_gain": ch.user_scale.gain if ch.user_scale else None,
-                        "range_error": (
-                            {"low": ch.range_error.low, "high": ch.range_error.high}
-                            if ch.range_error
-                            else None
-                        ),
-                        "limits": (
-                            {"limit1": ch.limits.limit1, "limit2": ch.limits.limit2}
-                            if ch.limits
-                            else None
-                        ),
-                    },
-                )
-        # #endregion
         super().configure_preop()
 
     def decode_tx_pdo_named(

@@ -195,57 +195,8 @@ class Master:
         for w in writes:
             if w.raw is None:
                 raise ValueError(f"CoE write 0x{w.index:04x}:{w.subindex} has no raw payload")
-            # #region agent log
-            if 0x8000 <= w.index <= 0x802F and w.subindex in (0x27, 0x28, 0x29, 0x2A, 0x1C, 0x1D):
-                import json
-                import struct
-                import time
-                from pathlib import Path
-
-                _log_path = Path(__file__).resolve().parents[2] / ".cursor" / "debug-3f1c65.log"
-                f32 = struct.unpack("<f", w.raw[:4])[0] if len(w.raw) >= 4 else None
-                payload = {
-                    "sessionId": "3f1c65",
-                    "hypothesisId": "A",
-                    "location": "master.py:apply_coe_writes",
-                    "message": "attempt CoE write",
-                    "data": {
-                        "slave": slave_idx,
-                        "index": f"0x{w.index:04x}",
-                        "subindex": w.subindex,
-                        "raw_hex": w.raw.hex(),
-                        "f32_le": f32,
-                    },
-                    "timestamp": int(time.time() * 1000),
-                }
-                with _log_path.open("a", encoding="utf-8") as fh:
-                    fh.write(json.dumps(payload) + "\n")
-            # #endregion
             result = self.write_coe(slave_idx, w.index, w.subindex, w.raw)
             if result.error is not None:
-                # #region agent log
-                if 0x8000 <= w.index <= 0x802F:
-                    import json
-                    import time
-                    from pathlib import Path
-
-                    _log_path = Path(__file__).resolve().parents[2] / ".cursor" / "debug-3f1c65.log"
-                    payload = {
-                        "sessionId": "3f1c65",
-                        "hypothesisId": "A",
-                        "location": "master.py:apply_coe_writes",
-                        "message": "CoE write failed",
-                        "data": {
-                            "slave": slave_idx,
-                            "index": f"0x{w.index:04x}",
-                            "subindex": w.subindex,
-                            "error": result.error,
-                        },
-                        "timestamp": int(time.time() * 1000),
-                    }
-                    with _log_path.open("a", encoding="utf-8") as fh:
-                        fh.write(json.dumps(payload) + "\n")
-                # #endregion
                 raise RuntimeError(
                     f"CoE write slave {slave_idx} 0x{w.index:04x}:0x{w.subindex:02x} "
                     f"payload={format_coe_payload(w.raw)} failed: {result.error}"

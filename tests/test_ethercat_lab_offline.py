@@ -350,6 +350,13 @@ def test_el3072_limits_filter_range_error_settings() -> None:
     assert by_idx[(0x800D, 0x2A)] == struct.pack("<f", 18.0)
     assert by_idx[(0x800D, 0x27)] == struct.pack("<f", -1.0)
     assert by_idx[(0x800D, 0x28)] == struct.pack("<f", 99.0)
+    ordered = [
+        (w.index, w.subindex)
+        for w in ch.settings_writes()
+        if w.index == 0x800D and w.subindex in (0x27, 0x28, 0x29, 0x2A)
+    ]
+    assert ordered.index((0x800D, 0x2A)) < ordered.index((0x800D, 0x29))
+    assert ordered.index((0x800D, 0x28)) < ordered.index((0x800D, 0x27))
 
 
 def test_decode_limit_trigger() -> None:
