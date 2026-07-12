@@ -1,7 +1,5 @@
 """EtherCAT lab REPL."""
 
-from pysoem import State
-
 from .master import Master, CoeTransfer
 from .pdo import PdoMapping, PdoAssignment, TxPdoAssignment, RxPdoAssignment
 from .beckhoff_device import BeckhoffDevice
@@ -38,7 +36,7 @@ from .aoe import (
 )
 
 __all__ = [
-    "Master", "CoeTransfer", "State", "PdoMapping", "PdoAssignment", "TxPdoAssignment", "RxPdoAssignment",
+    "Master", "CoeTransfer", "PdoMapping", "PdoAssignment", "TxPdoAssignment", "RxPdoAssignment",
     "BeckhoffDevice",
     "EL6224", "EL6224ChannelConfig", "IOLinkIsduChannel", "PdWireLayout",
     "encode_pd_settings_byte", "decode_pd_settings_byte",

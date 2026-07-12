@@ -5,7 +5,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any, Callable
 import pysoem
-from pysoem import State
+from enum import IntFlag
 
 from .aoe import (
     AOE_TIMEOUT_US, COE_SLAVE_NETID_INDEX, COE_SLAVE_NETID_SUB,
@@ -20,6 +20,14 @@ logger = logging.getLogger(__name__)
 EC_SLAVE_RESET_TO_DEFAULT_INDEX = 0x1011
 EC_SLAVE_RESET_TO_DEFAULT_SUB = 0x01
 EC_SLAVE_RESET_TO_DEFAULT_VALUE = b'\x64\x61\x6F\x6C'
+
+class State(IntFlag):
+    """EtherCAT AL state (pysoem bitmask values)."""
+
+    INIT = pysoem.INIT_STATE
+    PREOP = pysoem.PREOP_STATE
+    SAFEOP = pysoem.SAFEOP_STATE
+    OP = pysoem.OP_STATE
 
 def format_coe_exc(exc: BaseException) -> str:
     """pysoem CoE exceptions store details on attributes, not Exception.args."""
