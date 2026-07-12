@@ -146,7 +146,7 @@ class Banco:
     def pdo_to_data(self) -> InputDataSnapshot:
         el1034_raw = self.bus.pdoin(self.layout.el1034)
         el1004_raw = self.bus.pdoin(self.layout.el1004)
-        el3072_raw = self.bus.pdoin(self.layout.el6224)
+        el3072_raw = self.bus.pdoin(self.layout.el3072)
         el6224_raw = self.bus.pdoin(self.layout.el6224)
         ai_named = self.ai.decode_tx_pdo_named(el3072_raw)
         iolink_named = self.io_link.decode_tx_pdo_named(el6224_raw,parse_iolink=True)
