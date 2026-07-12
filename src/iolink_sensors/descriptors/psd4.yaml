@@ -59,7 +59,7 @@ registers:
   gradient:
     index: 67
     subindex: 0
-    format: "<f32"
+    format: "f32"
     access: r
 
   range_start:
@@ -532,31 +532,31 @@ registers:
   temperature_actual:
     index: 111
     subindex: 0
-    format: "<f32"
+    format: "f32"
     access: r
 
   temperature_low:
     index: 112
     subindex: 0
-    format: "<f32"
+    format: "f32"
     access: r
 
   temperature_high:
     index: 113
     subindex: 0
-    format: "<f32"
+    format: "f32"
     access: r
 
   temperature_low_since_power_up:
     index: 114
     subindex: 0
-    format: "<f32"
+    format: "f32"
     access: r
 
   temperature_high_since_power_up:
     index: 115
     subindex: 0
-    format: "<f32"
+    format: "f32"
     access: r
 
   # --- Diagnostics ---

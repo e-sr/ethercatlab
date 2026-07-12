@@ -49,13 +49,13 @@ registers:
   gradient_a:
     index: 8000
     subindex: 0
-    format: "<f32"
+    format: "f32"
     access: r
 
   gradient_b:
     index: 8010
     subindex: 0
-    format: "<f32"
+    format: "f32"
     access: r
 
   # --- OUT1 mode / output type (index 1210) ---
