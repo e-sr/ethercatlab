@@ -103,7 +103,7 @@ class InputDataSnapshot:
         return f"""
         EL1034: {self.el1034.to_hex()}
         EL1004: {self.el1004.to_hex()}
-        AIN: {self.ain.v1:+.3f}, {self.ain.i2:+.3f}
+        AIN: {self.ain.i1:+.3f}mA, {self.ain.v2:+.3f}V
         PF2M7: {self.pf2m7.value:6.3f} {self.pf2m7.unit}, out1: {self.pf2m7.out1}, out2: {self.pf2m7.out2}
         PSD4_1: {self.psd4_1.value:6.3f} {self.psd4_1.unit}, out1: {self.psd4_1.out1}, out2: {self.psd4_1.out2}
         PSD4_2: {self.psd4_2.value:6.3f} {self.psd4_2.unit}, out1: {self.psd4_2.out1}, out2: {self.psd4_2.out2}
