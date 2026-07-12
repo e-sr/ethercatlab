@@ -18,8 +18,8 @@ class Pf2m7IsduSetup:
 class Pf2m7Sample:
     value: float
     unit: str
-    ou1: bool
-    ou2: bool
+    out1: bool
+    out2: bool
     flags: dict[str, Any]
 
 
@@ -66,8 +66,8 @@ class Pf2m7Device(DeviceBase):
         return Pf2m7Sample(
             value=float(process_value) * self._scaling + self._offset,
             unit=self._unit,
-            ou1=out1,
-            ou2=out2,
+            out1=out1,
+            out2=out2,
             flags={
                 "error_diag": error_diag,
                 "fixed_output": fixed_output,
