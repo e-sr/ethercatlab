@@ -24,8 +24,6 @@ IsduReader = IsduPort
 def _bitstruct_format(fmt: str) -> str:
     if len(fmt) > 1 and fmt[0] == "<" and not fmt.endswith("<"):
         return fmt[1:] + "<"
-    if fmt and fmt[0] not in "<>" and not fmt.endswith("<"):
-        return fmt + "<"
     return fmt
 
 

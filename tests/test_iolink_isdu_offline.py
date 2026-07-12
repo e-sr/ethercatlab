@@ -2,9 +2,7 @@
 
 from __future__ import annotations
 
-import struct
-from typing import Any
-
+import bitstruct
 import pytest
 
 from ethercat_lab.aoe import parse_aoe_error
@@ -109,8 +107,8 @@ def test_pf2m7_apply_isdu_read_only() -> None:
         (16, 0): b"SMC" + b"\x00" * 61,
         (18, 0): b"PF2M771" + b"\x00" * 57,
         (1000, 0): b"\x00",
-        (8000, 0): struct.pack("<f", 0.00625),
-        (8010, 0): struct.pack("<f", 0.0),
+        (8000, 0): bitstruct.pack("f32", 0.00625),
+        (8010, 0): bitstruct.pack("f32", 0.0),
     })
     dev = Pf2m7Device()
     dev.apply_isdu(port)
@@ -132,8 +130,8 @@ def test_pf2m7_apply_isdu_with_write() -> None:
         (16, 0): b"SMC" + b"\x00" * 61,
         (18, 0): b"PF2M771" + b"\x00" * 57,
         (1000, 0): b"\x01",
-        (8000, 0): struct.pack("<f", 0.00625),
-        (8010, 0): struct.pack("<f", 0.0),
+        (8000, 0): bitstruct.pack("f32", 0.00625),
+        (8010, 0): bitstruct.pack("f32", 0.0),
     })
     dev = Pf2m7Device(setup=Pf2m7IsduSetup(display_unit=0))
     dev.apply_isdu(port)
@@ -146,7 +144,7 @@ def test_psd4_apply_isdu_with_write() -> None:
         (16, 0): b"WIKA" + b"\x00" * 60,
         (18, 0): b"PSD4" + b"\x00" * 60,
         (66, 0): b"\x03",
-        (67, 0): struct.pack("<f", 0.1),
+        (67, 0): bitstruct.pack("f32", 0.1),
         (68, 0): b"\x00\x00",
         (69, 0): b"\xe8\x03",
         (123, 0): b"\x00",
@@ -155,7 +153,7 @@ def test_psd4_apply_isdu_with_write() -> None:
     dev.apply_isdu(port)
     assert port.writes == [(66, 0, b"\x03")]
     assert dev.unit == "kPa"
-    assert dev.sample(process_value=100, ou1=True, ou2=False).value == pytest.approx(10.0)
+    assert dev.sample(process_value=100, out1=True, out2=False).value == pytest.approx(10.0)
 
 
 def test_write_rejects_readonly_register() -> None:
@@ -194,6 +192,6 @@ def test_device_register_and_command_enums() -> None:
     assert split_register_address(dev.Registers.gradient.value) == (0x43, 0)
     assert dev.Commands.reset_high_pressure.value == 160
     assert dev.read_reg(
-        _FakeIsduPort({(0x43, 0): struct.pack("<f", 0.1)}),
+        _FakeIsduPort({(0x43, 0): bitstruct.pack("f32", 0.1)}),
         dev.Registers.gradient,
     ) == pytest.approx(0.1)
