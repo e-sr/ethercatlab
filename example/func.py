@@ -68,7 +68,7 @@ class ELTerminalLayout:
             input_interface=InputInterface.I_4_20MA,
             user_scale= UserScaleConfig.physical(gain=1000.0, offset=0.0),
             limits=LimitConfig(limit1=6.0, limit2=8.0),
-            range_error=RangeErrorConfig(low=5.0, high=8.0),
+            range_error=RangeErrorConfig(low=5.0, high=10.0),
             iir_filter=IIRFilter.IIR21Hz,
             pdo_mode=PdoMode.COMPACT_REAL32,
             cycle_counters=True
@@ -78,7 +78,7 @@ class ELTerminalLayout:
             input_interface=InputInterface.V_0_10,
             user_scale=UserScaleConfig.physical(gain=1.0, offset=0.0),
             limits=LimitConfig(limit1=2.0, limit2=4.0),
-            range_error=RangeErrorConfig(low=2.0, high=17.0),
+            range_error=RangeErrorConfig(low=1.0, high=17.0),
             iir_filter=IIRFilter.IIR21Hz,
             pdo_mode=PdoMode.DEFAULT_REAL32,
         )
@@ -86,8 +86,8 @@ class ELTerminalLayout:
 
 @dataclass(frozen=True, slots=True)
 class AnalogInputSample:
-    v1: float
-    i2: float
+    i1: float
+    v2: float
 
 @dataclass(slots=True)
 class InputDataSnapshot:
@@ -155,8 +155,8 @@ class Banco:
             el1034=EL1xx4.from_bytes(el1034_raw),
             el1004=EL1xx4.from_bytes(el1004_raw),
             ain=AnalogInputSample(
-                v1=float(ai_named["ch2_DEFAULT_REAL32"]["value_f32"]),
-                i2=float(ai_named["ch1_COMPACT_REAL32"]["value_f32"]),
+                i1=float(ai_named["ch1_COMPACT_REAL32"]["value_f32"]),
+                v2=float(ai_named["ch2_DEFAULT_REAL32"]["value_f32"]),
             ),
             pf2m7=self.iolinksensors[0].sample(**iolink_named["ch1_iolink_pd"]),
             psd4_1=self.iolinksensors[1].sample(**iolink_named["ch2_iolink_pd"]),
@@ -255,10 +255,10 @@ def format_pdo_line(snapshot: InputDataSnapshot, do: EL2xx4) -> Text:
     line.append_text(_bool_indicators([snapshot.el1004.in1, snapshot.el1004.in2, snapshot.el1004.in3, snapshot.el1004.in4], on="bold yellow", off="dim"))
     line.append("  DI2 ", style="cyan")
     line.append_text(_bool_indicators([snapshot.el1034.in1, snapshot.el1034.in2, snapshot.el1034.in3, snapshot.el1034.in4], on="bold yellow", off="dim"))
-    line.append("  AI1 ±10V ", style="blue")
-    line.append(f" {snapshot.ain.v1:+.3f}V,", style="blue")
-    line.append("  AI2 4-20mA ", style="blue")
-    line.append(f" {snapshot.ain.i2:+.3f}mA", style="blue")
+    line.append("  AI1 4-20mA ", style="blue")
+    line.append(f" {snapshot.ain.i1:+.3f}mA", style="blue")
+    line.append("  AI2 ±10V ", style="blue")
+    line.append(f" {snapshot.ain.v2:+.3f}V,", style="blue")
     line.append("  PSD4_1 ", style="bright_blue")
     line.append(f" {snapshot.psd4_1.value:6.3f} {snapshot.psd4_1.unit}", style="bright_blue")
     line.append("  PSD4_2 ", style="bright_blue")
