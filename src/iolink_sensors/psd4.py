@@ -7,16 +7,6 @@ from iolink_sensors.isdu import IsduPort
 from iolink_sensors.loader import load_descriptor
 from iolink_sensors.models import DeviceBase
 
-_PRESSURE_UNIT: dict[int, str] = {
-    0: "bar",
-    1: "mbar",
-    2: "MPa",
-    3: "kPa",
-    4: "PSI",
-    5: "kg/cm²",
-    6: "%",
-}
-
 
 @dataclass(frozen=True, slots=True)
 class Psd4IsduSetup:
@@ -60,8 +50,8 @@ class Psd4Device(DeviceBase):
 
     def sync_from_isdu(self, port: IsduPort) -> None:
         self._gain = float(self.read_reg(port, "gradient"))
-        unit_code = int(self.read_reg(port, "unit_process_data"))
-        self._unit = _PRESSURE_UNIT.get(unit_code, f"code:{unit_code}")
+        unit = self.read_reg(port, "unit_process_data")
+        self._unit = unit.label
         self._sensor_status = int(self.read_reg(port, "sensor_status"))
 
     def sample(self, process_value: int, out1: bool, out2: bool) -> Psd4Sample:

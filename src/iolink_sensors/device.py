@@ -72,20 +72,29 @@ class DeviceBase:
         """Register values to push before ISDU sync. Empty = read-only."""
         return {}
 
-    def read_reg(self, port: IsduPort, name: str | IntEnum,raw: bool = False) -> Any:
+    def read_reg(self, port: IsduPort, name: str | IntEnum, *, raw: bool = False) -> Any:
         name_str = _reg_key(name)
         reg = self.descriptor.registers[name_str]
+        enum_cls = self.descriptor.register_enums.get(name_str)
         if raw:
             return read_register(port, reg, name_str)
-        return read_decoded_register(port, reg, name_str)
+        return read_decoded_register(port, reg, name_str, enum_cls=enum_cls)
 
     def write_reg(self, port: IsduPort, name: str | IntEnum, value: Any) -> None:
         name_str = _reg_key(name)
         reg = self.descriptor.registers[name_str]
+        enum_cls = self.descriptor.register_enums.get(name_str)
         if isinstance(value, bytes):
             write_register(port, reg, name_str, value)
         else:
-            write_encoded_register(port, reg, name_str, value)
+            write_encoded_register(port, reg, name_str, value, enum_cls=enum_cls)
+
+    def enum_for(self, name: str | IntEnum) -> type[IntEnum]:
+        name_str = _reg_key(name)
+        enum_cls = self.descriptor.register_enums.get(name_str)
+        if enum_cls is None:
+            raise KeyError(f"Register {name_str!r} has no value enum in descriptor")
+        return enum_cls
 
     def system_command(self, port: IsduPort, name: str | IntEnum) -> None:
         if isinstance(name, IntEnum):

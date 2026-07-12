@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from enum import IntEnum
 from typing import Any
 
 import bitstruct
@@ -38,7 +39,10 @@ class PdSpec(BaseModel):
 
 
 class SensorDescriptor(BaseModel):
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
     meta: dict[str, Any] = Field(default_factory=dict)
-    pd: PdSpec 
+    pd: PdSpec
     registers: dict[str, RegisterSpec]
     system_commands: dict[str, int] = Field(default_factory=dict)
+    register_enums: dict[str, type[IntEnum]] = Field(default_factory=dict)

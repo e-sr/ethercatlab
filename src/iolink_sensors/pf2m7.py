@@ -7,11 +7,6 @@ from iolink_sensors.isdu import IsduPort
 from iolink_sensors.loader import load_descriptor
 from iolink_sensors.models import DeviceBase
 
-_DISPLAY_UNIT: dict[int, str] = {
-    0: "L/min",
-    1: "cfm",
-}
-
 
 @dataclass(frozen=True, slots=True)
 class Pf2m7IsduSetup:
@@ -23,8 +18,8 @@ class Pf2m7IsduSetup:
 class Pf2m7Sample:
     value: float
     unit: str
-    out1: bool
-    out2: bool
+    ou1: bool
+    ou2: bool
     flags: dict[str, Any]
 
 
@@ -54,8 +49,8 @@ class Pf2m7Device(DeviceBase):
     def sync_from_isdu(self, port: IsduPort) -> None:
         self._scaling = float(self.read_reg(port, "gradient_a"))
         self._offset = float(self.read_reg(port, "gradient_b"))
-        unit_code = int(self.read_reg(port, "display_unit"))
-        self._unit = _DISPLAY_UNIT.get(unit_code, f"code:{unit_code}")
+        unit = self.read_reg(port, "display_unit")
+        self._unit = unit.label
 
     def sample(
         self,
@@ -71,8 +66,8 @@ class Pf2m7Device(DeviceBase):
         return Pf2m7Sample(
             value=float(process_value) * self._scaling + self._offset,
             unit=self._unit,
-            out1=out1,
-            out2=out2,
+            ou1=out1,
+            ou2=out2,
             flags={
                 "error_diag": error_diag,
                 "fixed_output": fixed_output,

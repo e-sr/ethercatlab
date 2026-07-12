@@ -118,7 +118,7 @@ def test_pf2m7_apply_isdu_read_only() -> None:
     assert dev.unit == "L/min"
     assert port.writes == []
     assert dev.sample(
-        pd_raw_s16=1000,
+        process_value=1000,
         error_diag=False,
         fixed_output=False,
         _pad1=False,
@@ -155,14 +155,35 @@ def test_psd4_apply_isdu_with_write() -> None:
     dev.apply_isdu(port)
     assert port.writes == [(66, 0, b"\x03")]
     assert dev.unit == "kPa"
-    assert dev.sample(process_value_raw14=100, ou1=True, ou2=False).value == pytest.approx(10.0)
+    assert dev.sample(process_value=100, ou1=True, ou2=False).value == pytest.approx(10.0)
 
 
 def test_write_rejects_readonly_register() -> None:
     desc = load_descriptor("pf2m7")
     port = _FakeIsduPort({})
     with pytest.raises(ValueError, match="cannot write"):
-        write_decoded_register(port, desc, "gradient_a", 1.0)
+        write_decoded_register(port, desc.registers["gradient_a"], "gradient_a", 1.0)
+
+
+def test_decode_register_enum() -> None:
+    desc = load_descriptor("psd4")
+    reg = desc.registers["unit_process_data"]
+    enum_cls = desc.register_enums["unit_process_data"]
+    member = decode_register_value(reg, b"\x03", enum_cls=enum_cls)
+    assert member.value == 3
+    assert member.label == "kPa"
+
+
+def test_encode_register_enum() -> None:
+    desc = load_descriptor("psd4")
+    reg = desc.registers["unit_process_data"]
+    enum_cls = desc.register_enums["unit_process_data"]
+    member = enum_cls.from_code(3)
+    assert encode_register_value(reg, member, enum_cls=enum_cls) == b"\x03"
+    assert encode_register_value(reg, "kPa", enum_cls=enum_cls) == b"\x03"
+    assert encode_register_value(reg, 3, enum_cls=enum_cls) == b"\x03"
+    with pytest.raises(ValueError, match="Invalid code"):
+        encode_register_value(reg, 99, enum_cls=enum_cls)
 
 
 def test_device_register_and_command_enums() -> None:

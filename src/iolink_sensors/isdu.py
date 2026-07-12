@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+from enum import IntEnum
 from typing import Any, Protocol
 
 import bitstruct
 
+from .register_enum import coerce_enum_value
 from .schema import RegisterSpec, SensorDescriptor
 
 
@@ -22,6 +24,8 @@ IsduReader = IsduPort
 def _bitstruct_format(fmt: str) -> str:
     if len(fmt) > 1 and fmt[0] == "<" and not fmt.endswith("<"):
         return fmt[1:] + "<"
+    if fmt and fmt[0] not in "<>" and not fmt.endswith("<"):
+        return fmt + "<"
     return fmt
 
 
@@ -59,18 +63,24 @@ def read_text_register(
     return decode_register_value(reg, raw.ljust(register_byte_size(reg), b"\x00"))
 
 
-def decode_register_value(reg: RegisterSpec, raw: bytes) -> Any:
+def decode_register_value(
+    reg: RegisterSpec, raw: bytes, *, enum_cls: type[IntEnum] | None = None,
+) -> Any:
     if reg.format.startswith("t"):
         end = raw.find(b"\x00")
         payload = raw if end < 0 else raw[:end]
         return payload.decode("utf-8", errors="replace").strip()
     values = bitstruct.unpack(_bitstruct_format(reg.format), raw)
     if len(values) == 1:
+        if enum_cls is not None:
+            return enum_cls.from_code(int(values[0]))  # type: ignore[attr-defined]
         return values[0]
     return values
 
 
-def encode_register_value(reg: RegisterSpec, value: Any) -> bytes:
+def encode_register_value(
+    reg: RegisterSpec, value: Any, *, enum_cls: type[IntEnum] | None = None,
+) -> bytes:
     if reg.format.startswith("t"):
         size = register_byte_size(reg)
         if not isinstance(value, (bytes, bytearray)):
@@ -80,6 +90,8 @@ def encode_register_value(reg: RegisterSpec, value: Any) -> bytes:
         if len(value) > size:
             raise ValueError(f"Text value too long for {reg.format!r} ({len(value)} > {size})")
         return value.ljust(size, b"\x00")
+    if enum_cls is not None:
+        value = coerce_enum_value(enum_cls, value)
     packed = bitstruct.pack(_bitstruct_format(reg.format), value)
     expected = register_byte_size(reg)
     if len(packed) != expected:
@@ -87,25 +99,43 @@ def encode_register_value(reg: RegisterSpec, value: Any) -> bytes:
     return packed
 
 
-def read_decoded_register(port: IsduPort, reg: RegisterSpec, name: str) -> Any:
-    return decode_register_value(reg, read_register(port, reg, name))
+def read_decoded_register(
+    port: IsduPort, reg: RegisterSpec, name: str, *, enum_cls: type[IntEnum] | None = None,
+) -> Any:
+    return decode_register_value(
+        reg, read_register(port, reg, name), enum_cls=enum_cls,
+    )
 
 def write_register(port: IsduPort, reg: RegisterSpec, name: str, value: bytes) -> None:
     _require_writable(reg, name)
     port.write_isdu(reg.index, value, reg.subindex)
 
 def write_encoded_register(
-    port: IsduPort, reg: RegisterSpec, name: str, value: Any,
+    port: IsduPort,
+    reg: RegisterSpec,
+    name: str,
+    value: Any,
+    *,
+    enum_cls: type[IntEnum] | None = None,
 ) -> None:
     _require_writable(reg, name)
-    port.write_isdu(reg.index, encode_register_value(reg, value), reg.subindex)
+    port.write_isdu(reg.index, encode_register_value(reg, value, enum_cls=enum_cls), reg.subindex)
+
+
+write_decoded_register = write_encoded_register
 
 
 def apply_isdu_writes(
     port: IsduPort, descriptor: SensorDescriptor, writes: dict[str, Any],
 ) -> None:
     for name, value in writes.items():
-        write_decoded_register(port, descriptor.registers[name], name, value)
+        write_decoded_register(
+            port,
+            descriptor.registers[name],
+            name,
+            value,
+            enum_cls=descriptor.register_enums.get(name),
+        )
 
 
 def read_identity(

@@ -45,6 +45,10 @@ registers:
     subindex: 0
     format: "u8"
     access: rw
+    fields:
+      - unit:
+          0: L/min
+          1: cfm
 
   gradient_a:
     index: 8000
