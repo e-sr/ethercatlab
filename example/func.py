@@ -66,9 +66,9 @@ class ELTerminalLayout:
         AnalogInputChannel(
             port=1,
             input_interface=InputInterface.I_4_20MA,
-            user_scale= UserScaleConfig.physical(gain=1000.0, offset=-4.0),
-            limits=LimitConfig(limit1=4.0, limit2=8.0),
-            range_error=RangeErrorConfig(low=1.0, high=5.0),
+            user_scale= UserScaleConfig.physical(gain=1000.0, offset=0.0),
+            limits=LimitConfig(limit1=6.0, limit2=8.0),
+            range_error=RangeErrorConfig(low=5.0, high=8.0),
             iir_filter=IIRFilter.IIR21Hz,
             pdo_mode=PdoMode.COMPACT_REAL32,
             cycle_counters=True
@@ -76,7 +76,7 @@ class ELTerminalLayout:
         AnalogInputChannel(
             port=2,
             input_interface=InputInterface.V_0_10,
-            user_scale=UserScaleConfig.physical(gain=2.0, offset=0.0),
+            user_scale=UserScaleConfig.physical(gain=1.0, offset=0.0),
             limits=LimitConfig(limit1=2.0, limit2=4.0),
             range_error=RangeErrorConfig(low=2.0, high=17.0),
             iir_filter=IIRFilter.IIR21Hz,
@@ -255,9 +255,10 @@ def format_pdo_line(snapshot: InputDataSnapshot, do: EL2xx4) -> Text:
     line.append_text(_bool_indicators([snapshot.el1004.in1, snapshot.el1004.in2, snapshot.el1004.in3, snapshot.el1004.in4], on="bold yellow", off="dim"))
     line.append("  DI2 ", style="cyan")
     line.append_text(_bool_indicators([snapshot.el1034.in1, snapshot.el1034.in2, snapshot.el1034.in3, snapshot.el1034.in4], on="bold yellow", off="dim"))
-    line.append("  AI1 ", style="blue")
-    line.append(f" {snapshot.ain.v1:+.3f}, overrang", style="blue")
-    line.append(f" {snapshot.ain.i2:+.3f}", style="blue")
+    line.append("  AI1 ±10V ", style="blue")
+    line.append(f" {snapshot.ain.v1:+.3f}V,", style="blue")
+    line.append("  AI2 4-20mA ", style="blue")
+    line.append(f" {snapshot.ain.i2:+.3f}mA", style="blue")
     line.append("  PSD4_1 ", style="bright_blue")
     line.append(f" {snapshot.psd4_1.value:6.3f} {snapshot.psd4_1.unit}", style="bright_blue")
     line.append("  PSD4_2 ", style="bright_blue")
