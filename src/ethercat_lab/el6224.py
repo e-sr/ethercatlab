@@ -16,8 +16,7 @@ from enum import IntEnum, IntFlag
 from typing import TYPE_CHECKING, Any, NoReturn
 
 import pysoem
-from pysoem import State
-
+from .master import State
 from iolink_sensors.models import  PdWireLayout
 
 from .beckhoff_device import BeckhoffDevice
