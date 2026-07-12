@@ -9,9 +9,7 @@ from rich.console import Console
 from rich.table import Table
 from IPython.display import display
 
-from pysoem import State
-
-from .master import CoeTransfer, Master
+from .master import CoeTransfer, Master, State
 from .coe import CoEEntry, CoeObject, format_coe_value
 
 _console = Console(color_system="truecolor", force_terminal=True)
