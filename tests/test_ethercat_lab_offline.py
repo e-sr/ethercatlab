@@ -643,6 +643,7 @@ def test_el2xx4_channels_follow_pdo_bit_order() -> None:
         value = 1 << channel
         sample = EL2xx4.from_hex(value)
         assert sample.to_list() == [i == channel for i in range(4)]
-        assert sample.pack() == bytes([value])
-        assert EL2xx4.from_bytes(bytes([value])) == sample
+        # Wire nibble is active-low vs logical channels.
+        assert sample.pack() == bytes([(~value) & 0x0F])
+        assert EL2xx4.from_bytes(bytes([(~value) & 0x0F])) == sample
         assert sample.to_hex() == value

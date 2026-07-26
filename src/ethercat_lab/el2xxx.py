@@ -6,7 +6,12 @@ from typing import Self
 
 @dataclass(frozen=True, slots=True)
 class EL2xx4:
-    """EL20x4 digital outputs — Beckhoff PDO bit0 = channel 1."""
+    """EL20x4 digital outputs — Beckhoff PDO bit0 = channel 1.
+
+    Logical o1..o4 are application-level (True = output requested ON).
+    On the wire the nibble is active-low relative to that convention
+    (observed on EL2004 bench terminals).
+    """
 
     o1: bool
     o2: bool
@@ -14,11 +19,11 @@ class EL2xx4:
     o4: bool
 
     def pack(self) -> bytes:
-        return bytes([self.to_hex()])
+        return bytes([(~self.to_hex()) & 0x0F])
 
     @classmethod
     def from_bytes(cls, data: bytes) -> Self:
-        return cls.from_hex(data[0])
+        return cls.from_hex((~int(data[0])) & 0x0F)
 
     @classmethod
     def from_hex(cls, value: int) -> Self:
