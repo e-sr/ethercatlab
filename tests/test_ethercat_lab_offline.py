@@ -8,6 +8,8 @@ from ethercat_lab.aoe import (
     COE_SLAVE_NETID_INDEX, COE_SLAVE_NETID_SUB,
 )
 from ethercat_lab.master import format_coe_exc
+from ethercat_lab.el1xxx import EL1xx4
+from ethercat_lab.el2xxx import EL2xx4
 from iolink_sensors.pd_layout import PdWireLayout
 from ethercat_lab.el6224 import (
     IoLinkChannelConfig,
@@ -627,3 +629,20 @@ def test_set_bus_state_raises_when_not_reached() -> None:
     bus.master.state_check = _fail_state_check  # type: ignore[method-assign]
     with pytest.raises(RuntimeError, match="Failed state transition"):
         bus.to_safeop()
+
+
+def test_el1xx4_channels_follow_pdo_bit_order() -> None:
+    for channel in range(4):
+        sample = EL1xx4.from_bytes(bytes([1 << channel]))
+        assert sample.to_list() == [i == channel for i in range(4)]
+        assert sample.to_hex() == 1 << channel
+
+
+def test_el2xx4_channels_follow_pdo_bit_order() -> None:
+    for channel in range(4):
+        value = 1 << channel
+        sample = EL2xx4.from_hex(value)
+        assert sample.to_list() == [i == channel for i in range(4)]
+        assert sample.pack() == bytes([value])
+        assert EL2xx4.from_bytes(bytes([value])) == sample
+        assert sample.to_hex() == value
