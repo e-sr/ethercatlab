@@ -179,24 +179,24 @@ I terminali generano le scritture CoE necessarie (`coe_setup_writes`), costruisc
 - **canali** — `in1..in4` / `o1..o4`, `to_list()`, `from_list()`, `EL2xx4.from_channels(1, 4)`: la numerazione che si legge sulla morsettiera. È la sola superficie che la logica applicativa deve usare.
 - **`raw`** — il nibble come sta nel process image, polarità inclusa. Solo per diagnostica, log e test al livello filo. `pack()` e `from_bytes()` sono wrapper su `raw` / `from_raw()`.
 
-L'ordine bit e la polarità vivono **solo** nella conversione `raw ↔ canali`, dentro `el1xxx.py` ed `el2xxx.py` separatamente. Convenzione verificata sul banco:
+L'ordine bit e la polarità vivono **solo** nella conversione `raw ↔ canali`, dentro `el1xxx.py` ed `el2xxx.py` separatamente. Convenzione Beckhoff / EL2004:
 
 | Canale | Bit sul filo |
 |--------|--------------|
-| DI1 / DO1 | bit 3 |
-| DI2 / DO2 | bit 2 |
-| DI3 / DO3 | bit 1 |
-| DI4 / DO4 | bit 0 |
+| DI1 / DO1 | bit 0 |
+| DI2 / DO2 | bit 1 |
+| DI3 / DO3 | bit 2 |
+| DI4 / DO4 | bit 3 |
 
-Le uscite sono **active-low**: un canale è ON quando il suo bit è 0, quindi tutte spente vale `raw == 0x0F`.
+Le uscite sono **active-high**: un canale è ON quando il suo bit è 1, quindi tutte spente vale `raw == 0x00`.
 
 ```python
 from ethercat_lab import EL2xx4
 
 dout = EL2xx4.from_channels(1)   # solo DO1 acceso
-dout.raw                         # 0x07 (bit3 a zero)
-dout.pack()                      # b"\x07"
-EL2xx4.all_off().raw             # 0x0F
+dout.raw                         # 0x01 (bit0 a uno)
+dout.pack()                      # b"\x01"
+EL2xx4.all_off().raw             # 0x00
 ```
 
 ### Sensori IO-Link

@@ -3,8 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Self
 
-_CHANNEL_WIRE_BITS = (0,1,2,3)
-"""Wire bit index of DI1..DI4 (verified on the bench: DI1 is the nibble MSB)."""
+_CHANNEL_WIRE_BITS = (0, 1, 2, 3)
+"""Wire bit index of DI1..DI4 (Beckhoff: DI1 is bit 0, DI4 is bit 3)."""
 
 
 @dataclass(frozen=True)

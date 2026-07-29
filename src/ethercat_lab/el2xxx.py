@@ -3,11 +3,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Self
 
-_CHANNEL_WIRE_BITS = (0,1,2,3)
-"""Wire bit index of DO1..DO4 (verified on the bench: DO1 is the nibble MSB)."""
+_CHANNEL_WIRE_BITS = (0, 1, 2, 3)
+"""Wire bit index of DO1..DO4 (Beckhoff: DO1 is bit 0, DO4 is bit 3)."""
 
-_WIRE_INVERT = 0x0F
-"""Wire polarity: 0x0F for active-low (ON == bit 0), 0x00 for active-high."""
+_WIRE_INVERT = 0x00
+"""Wire polarity: 0x00 for active-high (ON == bit 1), 0x0F for active-low."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -22,7 +22,7 @@ class EL2xx4:
     The wire encoding is described by exactly two module constants,
     `_CHANNEL_WIRE_BITS` (bit order) and `_WIRE_INVERT` (polarity); `raw` and
     `from_raw` are mirror images of each other and hold no other convention.
-    With the bench values, all outputs off is `raw == 0x0F`.
+    EL2004 is active-high: all outputs off is `raw == 0x00`.
     """
 
     o1: bool

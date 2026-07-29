@@ -632,21 +632,21 @@ def test_set_bus_state_raises_when_not_reached() -> None:
 
 
 def test_el1xx4_channel_wire_bits() -> None:
-    """DI1 is the nibble MSB: bit3 -> DI1, bit0 -> DI4 (bench truth table)."""
-    for index, bit in enumerate((3, 2, 1, 0)):
+    """DI1 is bit 0, DI4 is bit 3 (Beckhoff process-image order)."""
+    for index, bit in enumerate((0, 1, 2, 3)):
         sample = EL1xx4.from_raw(1 << bit)
         assert sample.to_list() == [i == index for i in range(4)]
         assert sample.raw == 1 << bit
         assert EL1xx4.from_bytes(bytes([1 << bit])) == sample
 
 
-def test_el2xx4_channel_wire_bits_are_active_low() -> None:
-    """DO1 is the nibble MSB and a channel is ON when its wire bit is 0."""
-    assert EL2xx4.all_off().raw == 0x0F
-    assert EL2xx4.all_on().raw == 0x00
-    for index, bit in enumerate((3, 2, 1, 0)):
+def test_el2xx4_channel_wire_bits_are_active_high() -> None:
+    """DO1 is bit 0 and a channel is ON when its wire bit is 1."""
+    assert EL2xx4.all_off().raw == 0x00
+    assert EL2xx4.all_on().raw == 0x0F
+    for index, bit in enumerate((0, 1, 2, 3)):
         sample = EL2xx4.from_list([i == index for i in range(4)])
-        wire = 0x0F & ~(1 << bit)
+        wire = 1 << bit
         assert sample.raw == wire
         assert sample.pack() == bytes([wire])
         assert EL2xx4.from_bytes(bytes([wire])) == sample
