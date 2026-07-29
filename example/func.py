@@ -101,8 +101,8 @@ class InputDataSnapshot:
     def __repr__(self) -> str:
         #multiline print
         return f"""
-        EL1034: {self.el1034.to_hex()}
-        EL1004: {self.el1004.to_hex()}
+        EL1034: {self.el1034.to_list()} raw=0x{self.el1034.raw:02X}
+        EL1004: {self.el1004.to_list()} raw=0x{self.el1004.raw:02X}
         AIN: {self.ain.i1:+.3f}mA, {self.ain.v2:+.3f}V
         PF2M7: {self.pf2m7.value:6.3f} {self.pf2m7.unit}, out1: {self.pf2m7.out1}, out2: {self.pf2m7.out2}
         PSD4_1: {self.psd4_1.value:6.3f} {self.psd4_1.unit}, out1: {self.psd4_1.out1}, out2: {self.psd4_1.out2}
@@ -185,7 +185,7 @@ class Banco:
         self,
         sample_period: float,
         repeat: int | None = None,
-        dosample: EL2xx4 = EL2xx4.from_hex(0x00),
+        dosample: EL2xx4 = EL2xx4.all_off(),
     ) -> Generator[InputDataSnapshot, EL2xx4, int]:
         
         self.set_ao_watchdog_timeout(int(sample_period * 1500))
@@ -274,8 +274,8 @@ _line_formatter: Callable[[InputDataSnapshot, EL2xx4], Text],
 _timing: bool = False) -> None:
     gen = banco.exchange_pdo_op(sample_period)
 
-    doON = EL2xx4.from_hex(0x0F)
-    doOFF = EL2xx4.from_hex(0x00)
+    doON = EL2xx4.all_on()
+    doOFF = EL2xx4.all_off()
 
     gen.send(None)  # Primi passaggi interni di setup
     current_out = doOFF

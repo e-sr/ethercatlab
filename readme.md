@@ -111,6 +111,8 @@ src/
 │   ├── aoe.py             # Costanti e helper AoE/AMS
 │   ├── pdo.py             # Mapping e assegnazione PDO
 │   ├── beckhoff_device.py # Base class terminali Beckhoff
+│   ├── el1xxx.py          # EL10x4 ingressi digitali 4ch
+│   ├── el2xxx.py          # EL20x4 uscite digitali 4ch
 │   ├── el6224.py          # EL6224 IO-Link master
 │   ├── el3072.py          # EL3072 ingressi analogici 2ch
 │   ├── magics.py          # Magic IPython (%ec_*)
@@ -169,6 +171,33 @@ ai.configure_preop()
 ```
 
 I terminali generano le scritture CoE necessarie (`coe_setup_writes`), costruiscono le assegnazioni PDO e decodificano i frame di process data.
+
+### Terminali digitali: canali per la logica, `raw` per il filo
+
+`EL1xx4` ed `EL2xx4` espongono due superfici distinte, per non confondere il numero di canale con la posizione del bit:
+
+- **canali** — `in1..in4` / `o1..o4`, `to_list()`, `from_list()`, `EL2xx4.from_channels(1, 4)`: la numerazione che si legge sulla morsettiera. È la sola superficie che la logica applicativa deve usare.
+- **`raw`** — il nibble come sta nel process image, polarità inclusa. Solo per diagnostica, log e test al livello filo. `pack()` e `from_bytes()` sono wrapper su `raw` / `from_raw()`.
+
+L'ordine bit e la polarità vivono **solo** nella conversione `raw ↔ canali`, dentro `el1xxx.py` ed `el2xxx.py` separatamente. Convenzione verificata sul banco:
+
+| Canale | Bit sul filo |
+|--------|--------------|
+| DI1 / DO1 | bit 3 |
+| DI2 / DO2 | bit 2 |
+| DI3 / DO3 | bit 1 |
+| DI4 / DO4 | bit 0 |
+
+Le uscite sono **active-low**: un canale è ON quando il suo bit è 0, quindi tutte spente vale `raw == 0x0F`.
+
+```python
+from ethercat_lab import EL2xx4
+
+dout = EL2xx4.from_channels(1)   # solo DO1 acceso
+dout.raw                         # 0x07 (bit3 a zero)
+dout.pack()                      # b"\x07"
+EL2xx4.all_off().raw             # 0x0F
+```
 
 ### Sensori IO-Link
 
