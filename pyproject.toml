@@ -9,11 +9,11 @@ dependencies = [
     "pydantic>=2.8.0",
     "PyYAML>=6.0.2",
     "typer>=0.12.3",
-    "pytest>=9.0.3",
     "bitstruct>=8.22.1",
     "ipython>=9.14.0",
     "rich>=15.0.0",
-]
+    "pysoem @ file:///${PROJECT_ROOT}/vendor/pysoem"
+    ]
 requires-python = "==3.13.*"
 readme = "readme.md"
 license = {text = "MIT"}
@@ -27,11 +27,7 @@ distribution = true
 [tool.pdm.build]
 package-dir = "src"
 
-
 [dependency-groups]
-dev = [
-    "-e file:///${PROJECT_ROOT}/vendor/pysoem#egg=pysoem",
-]
 test = [
     "pytest>=9.0.3",
 ]
