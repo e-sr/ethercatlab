@@ -26,6 +26,9 @@ distribution = true
 
 [tool.pdm.build]
 package-dir = "src"
+includes = [
+    "src/iolink_sensors/descriptors/*.yaml",
+]
 
 [dependency-groups]
 test = [
