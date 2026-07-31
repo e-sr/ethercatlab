@@ -55,8 +55,8 @@ class ELTerminalLayout:
     el6224: int = 2
     el3072: int = 3
     el2004: int = 4
-    el1034: int = 5
-    el1004: int = 6
+    el1004: int = 5
+    el1104: int = 6
     iolinksensors = [
         Pf2m7Device(setup=Pf2m7IsduSetup()),
         Psd4Device(setup=Psd4IsduSetup()),
@@ -66,7 +66,6 @@ class ELTerminalLayout:
         AnalogInputChannel(
             port=1,
             input_interface=InputInterface.I_4_20MA,
-            user_scale= UserScaleConfig.physical(gain=1000.0, offset=0.0),
             limits=LimitConfig(limit1=6.0, limit2=8.0),
             range_error=RangeErrorConfig(low=5.0, high=10.0),
             iir_filter=IIRFilter.IIR21Hz,
@@ -76,11 +75,10 @@ class ELTerminalLayout:
         AnalogInputChannel(
             port=2,
             input_interface=InputInterface.V_0_10,
-            user_scale=UserScaleConfig.physical(gain=1.0, offset=0.0),
             limits=LimitConfig(limit1=2.0, limit2=4.0),
             range_error=RangeErrorConfig(low=1.0, high=17.0),
             iir_filter=IIRFilter.IIR21Hz,
-            pdo_mode=PdoMode.DEFAULT_REAL32,
+            pdo_mode=PdoMode.COMPACT_REAL32,
         )
     ]
 
@@ -91,8 +89,8 @@ class AnalogInputSample:
 
 @dataclass(slots=True)
 class InputDataSnapshot:
-    el1034: EL1xx4
     el1004: EL1xx4
+    el1104: EL1xx4
     ain: AnalogInputSample
     pf2m7: Pf2m7Sample
     psd4_1: Psd4Sample
@@ -101,8 +99,8 @@ class InputDataSnapshot:
     def __repr__(self) -> str:
         #multiline print
         return f"""
-        EL1034: {self.el1034.to_list()} raw=0x{self.el1034.raw:02X}
-        EL1004: {self.el1004.to_list()} raw=0x{self.el1004.raw:02X}
+        EL1104:  {self.el1104.to_list()} raw=00 
+        EL1004: {self.el1004.to_list()} raw=00 
         AIN: {self.ain.i1:+.3f}mA, {self.ain.v2:+.3f}V
         PF2M7: {self.pf2m7.value:6.3f} {self.pf2m7.unit}, out1: {self.pf2m7.out1}, out2: {self.pf2m7.out2}
         PSD4_1: {self.psd4_1.value:6.3f} {self.psd4_1.unit}, out1: {self.psd4_1.out1}, out2: {self.psd4_1.out2}
@@ -144,19 +142,19 @@ class Banco:
             sensor.apply_isdu(isdu_channel)
 
     def pdo_to_data(self) -> InputDataSnapshot:
-        el1034_raw = self.bus.pdoin(self.layout.el1034)
         el1004_raw = self.bus.pdoin(self.layout.el1004)
+        el1104_raw = self.bus.pdoin(self.layout.el1104)
         el3072_raw = self.bus.pdoin(self.layout.el3072)
         el6224_raw = self.bus.pdoin(self.layout.el6224)
         ai_named = self.ai.decode_tx_pdo_named(el3072_raw)
         iolink_named = self.io_link.decode_tx_pdo_named(el6224_raw,parse_iolink=True)
 
         return InputDataSnapshot(
-            el1034=EL1xx4.from_bytes(el1034_raw),
+            el1104=EL1xx4.from_bytes(el1104_raw),
             el1004=EL1xx4.from_bytes(el1004_raw),
             ain=AnalogInputSample(
                 i1=float(ai_named["ch1_COMPACT_REAL32"]["value_f32"]),
-                v2=float(ai_named["ch2_DEFAULT_REAL32"]["value_f32"]),
+                v2=float(ai_named["ch2_COMPACT_REAL32"]["value_f32"]),
             ),
             pf2m7=self.iolinksensors[0].sample(**iolink_named["ch1_iolink_pd"]),
             psd4_1=self.iolinksensors[1].sample(**iolink_named["ch2_iolink_pd"]),
@@ -185,7 +183,7 @@ class Banco:
         self,
         sample_period: float,
         repeat: int | None = None,
-        dosample: EL2xx4 = EL2xx4.all_off(),
+        dosample: EL2xx4 = EL2xx4(False, False, False, False),
     ) -> Generator[InputDataSnapshot, EL2xx4, int]:
         
         self.set_ao_watchdog_timeout(int(sample_period * 1500))
@@ -274,8 +272,8 @@ _line_formatter: Callable[[InputDataSnapshot, EL2xx4], Text],
 _timing: bool = False) -> None:
     gen = banco.exchange_pdo_op(sample_period)
 
-    doON = EL2xx4.all_on()
-    doOFF = EL2xx4.all_off()
+    doON = EL2xx4(True, True, True, True)
+    doOFF = EL2xx4(False, False, False, False)
 
     gen.send(None)  # Primi passaggi interni di setup
     current_out = doOFF

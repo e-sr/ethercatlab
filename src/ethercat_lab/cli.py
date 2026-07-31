@@ -84,3 +84,7 @@ def main(
             print(f"Failed to load custom module: {exc}")
 
     shell()
+
+
+if __name__ == "__main__":
+    app()
