@@ -1,0 +1,157 @@
+meta:
+  id: imi54d
+  vendor: IMI Norgren
+  profile: pressure_switch
+  product_name_match: 54D
+  product_id: 54D-V110G-DA1-AA
+  device_id: 32769
+
+pd:
+  frame_type: "2.2"
+  in:
+    fields:
+      - typeprefix: s
+        length: 14
+        name: process_value
+      - typeprefix: b
+        length: 1
+        name: out2
+      - typeprefix: b
+        length: 1
+        name: out1
+
+system_commands:
+  reset_hi_lo_memory: 161
+  reset_lo_memory: 162
+  reset_hi_memory: 163
+  teach_cof: 194
+
+registers:
+  # --- Switching output 1 ---
+  # Raw integers; physical scale follows `unit` (bar: *0.01, kPa: *1,
+  # psi: *0.14504, inHg: *0.2953). SP must stay above rP.
+  sp_fh1:
+    index: 67
+    subindex: 0
+    format: "s16"
+    access: rw
+
+  rp_fl1:
+    index: 68
+    subindex: 0
+    format: "s16"
+    access: rw
+
+  ou1_mode:
+    index: 83
+    subindex: 0
+    format: "u8"
+    access: rw
+    fields:
+      - mode:
+          3: HNO
+          4: HNC
+          5: FNO
+          6: FNC
+
+  switch_delay_ms:
+    index: 77
+    subindex: 0
+    format: "u16"
+    access: rw
+
+  reset_delay_ms:
+    index: 78
+    subindex: 0
+    format: "u16"
+    access: rw
+
+  damping:
+    index: 75
+    subindex: 0
+    format: "u8"
+    access: rw
+    fields:
+      - time:
+          0: 6ms
+          1: 10ms
+          2: 30ms
+          3: 60ms
+          4: 100ms
+          5: 250ms
+          6: 500ms
+          7: 1000ms
+          8: 2000ms
+
+  # --- Unit (display + process-data scale) ---
+  unit:
+    index: 85
+    subindex: 0
+    format: "u8"
+    access: rw
+    fields:
+      - unit:
+          0: bar
+          1: kPa
+          2: psi
+          3: inHg
+
+  # --- Calibration / setup ---
+  # COF: zero-point offset, 0.1 % FS per count (−20..20).
+  calibration_offset:
+    index: 74
+    subindex: 0
+    format: "s16"
+    access: rw
+
+  # SySP: system-pressure parameter; scale depends on `unit`.
+  system_pressure:
+    index: 86
+    subindex: 0
+    format: "s16"
+    access: rw
+
+  # --- Local display ---
+  display_color:
+    index: 73
+    subindex: 0
+    format: "u8"
+    access: rw
+    fields:
+      - color:
+          0: r-on
+          1: G-on
+          2: rEd
+          3: GrEn
+
+  # Packed 16-bit record (no subindex access):
+  # bit7 display off, bit6 rotate 180°, bits5-0 update rate
+  # (1=d1 fast, 2=d2 medium, 4=d3 slow, 32=Ph peak hold).
+  display:
+    index: 76
+    subindex: 0
+    format: "u16"
+    access: rw
+
+  local_lock:
+    index: 93
+    subindex: 0
+    format: "u8"
+    access: rw
+    fields:
+      - lock:
+          0: Loc
+          1: uLoc
+
+  # --- Diagnostics (min/max memory) ---
+  pressure_low:
+    index: 81
+    subindex: 0
+    format: "s16"
+    access: r
+
+  pressure_high:
+    index: 82
+    subindex: 0
+    format: "s16"
+    access: r

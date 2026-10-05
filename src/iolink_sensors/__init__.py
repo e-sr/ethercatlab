@@ -1,3 +1,4 @@
+from iolink_sensors.imi54d import Imi54dDevice
 from iolink_sensors.pf2m7 import Pf2m7Device
 from iolink_sensors.psd4 import Psd4Device
 from iolink_sensors.pd_layout import PdWireLayout
@@ -7,6 +8,7 @@ from iolink_sensors.models import DeviceBase, PdFrameFieldSpec, PdFrameSpec, Sen
 __all__ = [
     "Psd4Device",
     "Pf2m7Device",
+    "Imi54dDevice",
     "PdFrameFieldSpec",
     "PdFrameSpec",
     "PdWireLayout",
