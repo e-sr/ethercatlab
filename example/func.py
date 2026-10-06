@@ -21,6 +21,7 @@ from ethercat_lab.el6224 import IoLinkChannelConfig, EL6224,decode_port_status_b
 from iolink_sensors.models import DeviceBase
 from iolink_sensors.pf2m7 import Pf2m7Device, Pf2m7Sample, Pf2m7IsduSetup
 from iolink_sensors.psd4 import Psd4Device, Psd4Sample, Psd4IsduSetup
+from iolink_sensors.imi54d import Imi54dDevice, Imi54dSample, Imi54dIsduSetup
 from ethercat_lab.el3072 import EL3072, AnalogInputChannel, InputInterface, PdoMode, UserScaleConfig, LimitConfig, RangeErrorConfig, IIRFilter, LimitTriggerType
 from collections.abc import Generator
 from ethercat_lab.pdo import PdoMapEntry, PdoMapping
@@ -60,7 +61,8 @@ class ELTerminalLayout:
     iolinksensors = [
         Pf2m7Device(setup=Pf2m7IsduSetup()),
         Psd4Device(setup=Psd4IsduSetup()),
-        Psd4Device(setup=Psd4IsduSetup())
+        Psd4Device(setup=Psd4IsduSetup()),
+        Imi54dDevice(setup=Imi54dIsduSetup()),
         ]
     analog_inputs = [
         AnalogInputChannel(
@@ -95,6 +97,7 @@ class InputDataSnapshot:
     pf2m7: Pf2m7Sample
     psd4_1: Psd4Sample
     psd4_2: Psd4Sample
+    imi54d: Imi54dSample
     iolink_port_statuses: dict[int, tuple[PortStatusError, PortStatusMode, PortStatusFlag]]
     def __repr__(self) -> str:
         #multiline print
@@ -105,6 +108,7 @@ class InputDataSnapshot:
         PF2M7: {self.pf2m7.value:6.3f} {self.pf2m7.unit}, out1: {self.pf2m7.out1}, out2: {self.pf2m7.out2}
         PSD4_1: {self.psd4_1.value:6.3f} {self.psd4_1.unit}, out1: {self.psd4_1.out1}, out2: {self.psd4_1.out2}
         PSD4_2: {self.psd4_2.value:6.3f} {self.psd4_2.unit}, out1: {self.psd4_2.out1}, out2: {self.psd4_2.out2}
+        IMi54D: {self.imi54d.value:6.3f} {self.imi54d.unit}, out1: {self.imi54d.out1}, out2: {self.imi54d.out2}
         IOLink port statuses: {self.iolink_port_statuses}
         """
 
@@ -159,6 +163,7 @@ class Banco:
             pf2m7=self.iolinksensors[0].sample(**iolink_named["ch1_iolink_pd"]),
             psd4_1=self.iolinksensors[1].sample(**iolink_named["ch2_iolink_pd"]),
             psd4_2=self.iolinksensors[2].sample(**iolink_named["ch3_iolink_pd"]),
+            imi54d=self.iolinksensors[3].sample(**iolink_named["ch4_iolink_pd"]),
             iolink_port_statuses=self.io_link.iolink_master_state_to_enum(iolink_named["dev_state_ports"]),
             
         )
@@ -252,7 +257,7 @@ def format_pdo_line(snapshot: InputDataSnapshot, do: EL2xx4) -> Text:
     line.append("DI1 ", style="cyan")
     line.append_text(_bool_indicators([snapshot.el1004.in1, snapshot.el1004.in2, snapshot.el1004.in3, snapshot.el1004.in4], on="bold yellow", off="dim"))
     line.append("  DI2 ", style="cyan")
-    line.append_text(_bool_indicators([snapshot.el1034.in1, snapshot.el1034.in2, snapshot.el1034.in3, snapshot.el1034.in4], on="bold yellow", off="dim"))
+    line.append_text(_bool_indicators([snapshot.el1104.in1, snapshot.el1104.in2, snapshot.el1104.in3, snapshot.el1104.in4], on="bold yellow", off="dim"))
     line.append("  AI1 4-20mA ", style="blue")
     line.append(f" {snapshot.ain.i1:+.3f}mA", style="blue")
     line.append("  AI2 ±10V ", style="blue")
@@ -263,6 +268,8 @@ def format_pdo_line(snapshot: InputDataSnapshot, do: EL2xx4) -> Text:
     line.append(f" {snapshot.psd4_2.value:6.3f} {snapshot.psd4_2.unit}", style="bright_blue")
     line.append("  PF2M7 ", style="bright_blue")
     line.append(f" {snapshot.pf2m7.value:6.3f} {snapshot.pf2m7.unit}", style="bright_blue")
+    line.append("  IMi54D ", style="bright_blue")
+    line.append(f" {snapshot.imi54d.value:6.3f} {snapshot.imi54d.unit}", style="bright_blue")
     return line
 
 

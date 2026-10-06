@@ -1,7 +1,7 @@
-"""Esempio minimale: 3 sensori IO-Link su EL6224.
+"""Esempio: 4 sensori IO-Link su EL6224.
 
 Hardware (stesso banco di ``func.py``):
-  slave 3 = EL6224 — porta 1 PF2M7, porte 2-3 PSD4
+  slave 2 = EL6224 — porta 1 PF2M7, porte 2-3 PSD4, porta 4 IMi54D
 
 Workflow
 --------
@@ -18,7 +18,7 @@ Run REPL::
     read_sensors(bus, iolink, channels)
 
     # oppure demo completa:
-    run_demo(bus, cycles=10, period=0.1)
+    run_demo(bus, cycles=10, period=1.0)
 
 Run standalone::
 
@@ -36,6 +36,7 @@ from typing import TYPE_CHECKING
 
 from ethercat_lab import Master
 from ethercat_lab.el6224 import EL6224, IoLinkChannelConfig
+from iolink_sensors.imi54d import Imi54dDevice, Imi54dIsduSetup, Imi54dSample
 from iolink_sensors.pf2m7 import Pf2m7Device, Pf2m7IsduSetup, Pf2m7Sample
 from iolink_sensors.psd4 import Psd4Device, Psd4IsduSetup, Psd4Sample
 
@@ -45,13 +46,13 @@ if TYPE_CHECKING:
 # Injected by ``eci --macros`` before module exec; ``None`` when imported as library/script.
 bus: Master | None = None
 
-EL6224_SLAVE = 3
+EL6224_SLAVE = 2
 
 
 @dataclass(slots=True)
 class SensorChannel:
     port: int
-    device: Pf2m7Device | Psd4Device
+    device: Pf2m7Device | Psd4Device | Imi54dDevice
 
 
 @dataclass(slots=True)
@@ -59,13 +60,15 @@ class SensorSnapshot:
     pf2m7: Pf2m7Sample
     psd4_p2: Psd4Sample
     psd4_p3: Psd4Sample
+    imi54d: Imi54dSample
 
-
-def make_channels(ports: tuple[int, ...] = (1, 2, 3)) -> list[SensorChannel]:
-    factory: dict[int, Pf2m7Device | Psd4Device] = {
+#max 4 ports
+def make_channels(ports: tuple[int, ...] = (1, 2, 3, 4)) -> list[SensorChannel]:
+    factory: dict[int, Pf2m7Device | Psd4Device | Imi54dDevice] = {
         1: Pf2m7Device(setup=Pf2m7IsduSetup(display_unit=0)),
-        2: Psd4Device(),
-        3: Psd4Device(),
+        2: Psd4Device(setup=Psd4IsduSetup()),
+        3: Psd4Device(setup=Psd4IsduSetup()),
+        4: Imi54dDevice(setup=Imi54dIsduSetup()),
     }
     return [SensorChannel(port, factory[port]) for port in ports]
 
@@ -83,7 +86,7 @@ def setup_preop(iolink: EL6224) -> None:
     iolink.configure_preop(aoe_init=True)
 
 
-def init_stack(master: Master, ports: tuple[int, ...] = (1, 2, 3)) -> tuple[EL6224, list[SensorChannel]]:
+def init_stack(master: Master, ports: tuple[int, ...] = (1, 2, 3, 4)) -> tuple[EL6224, list[SensorChannel]]:
     iolink = EL6224(master, EL6224_SLAVE)
     channels = make_channels(ports)
     register_channels(iolink, channels)
@@ -124,43 +127,45 @@ def read_sensors(
     master: Master,
     iolink: EL6224,
     channels: list[SensorChannel],
-) -> dict[int, Pf2m7Sample | Psd4Sample]:
+) -> dict[int, Pf2m7Sample | Psd4Sample | Imi54dSample]:
     """Fase 3: lettura PDO — bus in OP (o SAFE-OP con almeno un ciclo)."""
     master.cycle()
     pd = iolink.decode_tx_pdo_named(master.pdoin(EL6224_SLAVE))
-    samples: dict[int, Pf2m7Sample | Psd4Sample] = {}
+    samples: dict[int, Pf2m7Sample | Psd4Sample | Imi54dSample] = {}
     for ch in channels:
         field = f"ch{ch.port}_iolink_pd"
         samples[ch.port] = ch.device.sample(**pd[field])  # type: ignore[call-arg]
     return samples
 
 
-def snapshot_from_samples(samples: dict[int, Pf2m7Sample | Psd4Sample]) -> SensorSnapshot:
+def snapshot_from_samples(samples: dict[int, Pf2m7Sample | Psd4Sample | Imi54dSample]) -> SensorSnapshot:
     return SensorSnapshot(
         pf2m7=samples[1],  # type: ignore[arg-type]
         psd4_p2=samples[2],  # type: ignore[arg-type]
         psd4_p3=samples[3],  # type: ignore[arg-type]
+        imi54d=samples[4],  # type: ignore[arg-type]
     )
 
 
-def format_snapshot(snapshot: SensorSnapshot | dict[int, Pf2m7Sample | Psd4Sample]) -> str:
+def format_snapshot(snapshot: SensorSnapshot | dict[int, Pf2m7Sample | Psd4Sample | Imi54dSample]) -> str:
     if isinstance(snapshot, dict):
         parts = [f"p{p}={s.value:7.3f} {s.unit}" for p, s in sorted(snapshot.items())]
         return "  ".join(parts)
-    p1, p2, p3 = snapshot.pf2m7, snapshot.psd4_p2, snapshot.psd4_p3
+    p1, p2, p3, p4 = snapshot.pf2m7, snapshot.psd4_p2, snapshot.psd4_p3, snapshot.imi54d
     return (
-        f"PF2M7={p1.value:7.3f} {p1.unit}  "
-        f"PSD4/2={p2.value:7.3f} {p2.unit}  "
-        f"PSD4/3={p3.value:7.3f} {p3.unit}"
+        f"PF2M7={p1.value:7.3f} {p1.unit}\n"
+        f"PSD4/2={p2.value:7.3f} {p2.unit}\n"
+        f"PSD4/3={p3.value:7.3f} {p3.unit}\n"
+        f"IMi54D={p4.value:7.3f} {p4.unit}"
     )
 
 
 def run_demo(
     master: Master,
     *,
-    ports: tuple[int, ...] = (1, 2, 3),
+    ports: tuple[int, ...] = (1, 2, 3, 4),
     cycles: int = 10,
-    period: float = 0.1,
+    period: float = 1.0,
 ) -> None:
     """Workflow completo: PRE-OP → ISDU (SAFE-OP) → OP → letture PDO."""
     iolink, channels = init_stack(master, ports)
@@ -184,14 +189,14 @@ def _parse_ports(text: str) -> tuple[int, ...]:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="3 sensori IO-Link su EL6224 (PF2M7 + 2× PSD4)")
+    parser = argparse.ArgumentParser(description="4 sensori IO-Link su EL6224 (PF2M7 + 2× PSD4 + IMi54D)")
     parser.add_argument("ifname", help="Interfaccia EtherCAT (es. enp2s0)")
     parser.add_argument(
-        "--ports", type=_parse_ports, default=(1, 2, 3),
-        help="Porte IO-Link da usare (default: 1,2,3). Es. --ports 1 se solo PF2M7",
+        "--ports", type=_parse_ports, default=(1, 2, 3, 4),
+        help="Porte IO-Link da usare (default: 1,2,3,4). Es. --ports 1 se solo PF2M7",
     )
     parser.add_argument("-n", "--cycles", type=int, default=10, help="Cicli PDO in OP (default: 10)")
-    parser.add_argument("-p", "--period", type=float, default=0.1, help="Periodo tra letture in secondi (default: 0.1)")
+    parser.add_argument("-p", "--period", type=float, default=1.0, help="Periodo tra letture in secondi (default: 1.0)")
     args = parser.parse_args(argv)
 
     master = Master(args.ifname)
