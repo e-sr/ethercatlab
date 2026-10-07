@@ -123,9 +123,6 @@ class DeviceBase:
         apply_isdu_writes(port, self.descriptor, self.isdu_writes())
         if verify:
             self.check_port(port)
-        else:
-            _, product = read_identity(port, self.descriptor)
-            assert_product_matches(self.descriptor, product)
         self.sync_from_isdu(port)
 
     def configure_from_isdu(self, port: IsduPort, *, verify: bool = True) -> None:
