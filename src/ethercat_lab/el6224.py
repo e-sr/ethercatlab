@@ -56,10 +56,10 @@ _PD_FIELD = "iolink_pd"
 # Hardcoded TxPDO specs because they are not configurable
 _PDO_SPECS_RAW: dict[int, list[tuple[int, int, int, str | None, str]]] = {
     0x1A80: [
-        (0xF100, 0x01, 8, "state_ch1", "u"),
-        (0xF100, 0x02, 8, "state_ch2", "u"),
-        (0xF100, 0x03, 8, "state_ch3", "u"),
-        (0xF100, 0x04, 8, "state_ch4", "u"),
+        (0xF100, 0x01, 8, "state_port1", "u"),
+        (0xF100, 0x02, 8, "state_port2", "u"),
+        (0xF100, 0x03, 8, "state_port3", "u"),
+        (0xF100, 0x04, 8, "state_port4", "u"),
     ],
     0x1A81: [
         (0, 0, 12, None, "p"),
@@ -147,7 +147,7 @@ def decode_pd_settings_byte(code: int) -> tuple[int, bool]:
     return code & 0x1F, sio
 
 @dataclass(frozen=True, slots=True)
-class IoLinkChannelConfig:
+class IoLinkPortConfig:
     port: int
     pd_in: PdWireLayout | None = None
     pd_out: PdWireLayout | None = None
@@ -186,7 +186,7 @@ class IoLinkChannelConfig:
 
     @property
     def pd_field_name(self) -> str:
-        return f"ch{self.port}_{_PD_FIELD}"
+        return f"port{self.port}_{_PD_FIELD}"
 
     def settings_writes(self) -> list[CoeTransfer]:
         sioin = self.pd_in.sio if self.pd_in is not None else False
@@ -230,9 +230,9 @@ class IoLinkChannelConfig:
         )
 
 
-def all_channel_coe_writes(channels: list[IoLinkChannelConfig]) -> list[CoeTransfer]:
+def all_port_coe_writes(ports: list[IoLinkPortConfig]) -> list[CoeTransfer]:
     ops: list[CoeTransfer] = []
-    for cfg in sorted(channels, key=lambda c: c.port):
+    for cfg in sorted(ports, key=lambda c: c.port):
         ops.extend(cfg.settings_writes())
     return ops
 
@@ -247,29 +247,29 @@ def _port_functional(
 class EL6224(BeckhoffDevice):
     def __init__(self, bus: Master, slave_idx: int, *, include_device_state: bool = True) -> None:
         super().__init__(bus, slave_idx)
-        self._channels: dict[int, IoLinkChannelConfig] = {}
+        self._ports: dict[int, IoLinkPortConfig] = {}
         self._aoe_init = True
         self.include_device_state = include_device_state
 
-    def set_channel(self,channel: IoLinkChannelConfig) -> None:
-        """Register a port recipe; optional ``device`` enables ``parse_pd`` on the channel."""
-        self._channels[channel.port] = channel
+    def set_port(self, port: IoLinkPortConfig) -> None:
+        """Register a port recipe; ``pd_in`` enables PDO parse for that port."""
+        self._ports[port.port] = port
         self.refresh_pdo_assignments()
 
-    def clear_channels(self,port: int) -> None:
-        self._channels.pop(port, None)
+    def clear_port(self, port: int) -> None:
+        self._ports.pop(port, None)
         self.refresh_pdo_assignments()
 
     @property
-    def channels(self) -> list[IoLinkChannelConfig]:
-        return list(self._channels.values())
+    def ports(self) -> list[IoLinkPortConfig]:
+        return list(self._ports.values())
 
     def preop_hook(self) -> None:
         if self._aoe_init:
             self._bus.aoe_init(self.slave_idx)
 
     def coe_setup_writes(self) -> list[CoeTransfer]:
-        return all_channel_coe_writes(self.channels)
+        return all_port_coe_writes(self.ports)
 
     def build_tx_assignment(self) -> TxPdoAssignment :
         items: list[tuple[str, PdoMapping]] = []
@@ -291,7 +291,7 @@ class EL6224(BeckhoffDevice):
                 ),
             ))
 
-        for cfg in self.channels:
+        for cfg in self.ports:
             map=cfg.txpdo_mapping()
             if map is not None:
                 items.append((cfg.pd_field_name, map))
@@ -300,7 +300,7 @@ class EL6224(BeckhoffDevice):
 
     def build_rx_assignment(self) -> RxPdoAssignment | None:
         items: list[tuple[str, PdoMapping]] = []
-        for cfg in self.channels:
+        for cfg in self.ports:
             map=cfg.rxpdo_mapping()
             if map is not None:
                 items.append((cfg.pd_field_name, map))
@@ -317,8 +317,8 @@ class EL6224(BeckhoffDevice):
         """Decode F100 ``dev_state_ports`` bytes to port -> (errors, mode, flags)."""
         out: dict[int, tuple[PortStatusError, PortStatusMode, PortStatusFlag]] = {}
         for key, value in dev_state_ports.items():
-            if key.startswith("state_ch"):
-                out[int(key.removeprefix("state_ch"))] = decode_port_status_byte(int(value))
+            if key.startswith("state_port"):
+                out[int(key.removeprefix("state_port"))] = decode_port_status_byte(int(value))
         return out
 
     @property
@@ -338,14 +338,14 @@ class EL6224(BeckhoffDevice):
         status = self.iolink_master_status_F100.get(port)
         return status is not None and _port_functional(status)
 
-    def get_isdu_channel(self, port: int) -> IOLinkIsduChannel:
-        if port not in self._channels:
-            raise ValueError(f"Port {port} not found in channels")
-        return IOLinkIsduChannel(iolinkmaster=self, port=port)
+    def isdu_port(self, port: int) -> IoLinkIsduPort:
+        if port not in self._ports:
+            raise ValueError(f"Port {port} is not registered")
+        return IoLinkIsduPort(iolinkmaster=self, port=port)
 
     def configure_preop(self, *, aoe_init: bool = True) -> None:
-        if not self.channels:
-            raise ValueError("No IO-Link channels registered; call add_channel() first")
+        if not self.ports:
+            raise ValueError("No IO-Link ports registered; call set_port() first")
         self._aoe_init = aoe_init
         self.refresh_pdo_assignments()
         super().configure_preop()
@@ -353,7 +353,7 @@ class EL6224(BeckhoffDevice):
     def decode_tx_pdo_named(self, raw: bytes,parse_iolink: bool = True) -> dict[str, Any]:
         decoded = super().decode_tx_pdo_named(raw)
         if parse_iolink:
-            for cfg in self.channels:
+            for cfg in self.ports:
                 if cfg.pd_in is None:
                     continue
                 decoded[cfg.pd_field_name] = cfg.pd_in.decode_named(decoded[cfg.pd_field_name]["raw"])
@@ -366,11 +366,11 @@ def _isdu_err(exc, offset: int, ams_port: int, *, write: bool, nbytes: int) -> N
         raise pysoem.AoeError(
             exc.slave_pos, exc.ams_error_code, exc.index_group, exc.index_offset,
             f"{parse_aoe_error(exc.ams_error_code)}{isdu_access_hint(idx, writing=write)} "
-            f"(port {ams_port:#x}, ISDU 0x{idx:04x}:{sub}, {op} {nbytes} B)",
+            f"(ams_port {ams_port:#x}, ISDU 0x{idx:04x}:{sub}, {op} {nbytes} B)",
         ) from exc
     raise RuntimeError(
         f"ISDU {op}: {parse_packet_error(exc.error_code)} "
-        f"(port {ams_port:#x}, ISDU 0x{idx:04x}:{sub}, {nbytes} B)"
+        f"(ams_port {ams_port:#x}, ISDU 0x{idx:04x}:{sub}, {nbytes} B)"
     ) from exc
 
 
@@ -382,8 +382,8 @@ def _isdu_transient(exc: BaseException) -> bool:
     return isinstance(exc, pysoem.PacketError)
 
 
-class IOLinkIsduChannel:
-    """One EL6224 port: PRE-OP channel recipe, runtime ISDU and optional PDO parse."""
+class IoLinkIsduPort:
+    """One EL6224 port: PRE-OP port recipe, runtime ISDU and optional PDO parse."""
 
     def __init__(
         self,
@@ -392,7 +392,7 @@ class IOLinkIsduChannel:
     ) -> None:
         self._iolinkmaster = iolinkmaster
         self.port = port
-        self.iolink_channel = self._iolinkmaster._channels[port]
+        self.config = self._iolinkmaster._ports[port]
 
     def _check_master_state(self) -> None:
         state = self._iolinkmaster._bus.master.state

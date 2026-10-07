@@ -158,11 +158,11 @@ bus.close()
 ### Terminali Beckhoff
 
 ```python
-from ethercat_lab import EL6224, EL3072, IoLinkChannelConfig
+from ethercat_lab import EL6224, EL3072, IoLinkPortConfig
 from iolink_sensors.pf2m7 import Pf2m7Device
 
 iolink = EL6224(bus, slave_idx=3)
-iolink.set_channel(IoLinkChannelConfig(port=1, pd_in=Pf2m7Device().pd_in_layout))
+iolink.set_port(IoLinkPortConfig(port=1, pd_in=Pf2m7Device().pd_in_layout))
 iolink.configure_preop(aoe_init=True)
 
 ai = EL3072(bus, slave_idx=5)

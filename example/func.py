@@ -16,8 +16,8 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Generator, Callable
 
-from ethercat_lab import IOLinkIsduChannel
-from ethercat_lab.el6224 import IoLinkChannelConfig, EL6224,decode_port_status_byte
+from ethercat_lab import IoLinkIsduPort
+from ethercat_lab.el6224 import IoLinkPortConfig, EL6224,decode_port_status_byte
 from iolink_sensors.models import DeviceBase
 from iolink_sensors.pf2m7 import Pf2m7Device, Pf2m7Sample, Pf2m7IsduSetup
 from iolink_sensors.psd4 import Psd4Device, Psd4Sample, Psd4IsduSetup
@@ -121,8 +121,8 @@ class Banco:
         self.iolinksensors = self.layout.iolinksensors
 
         for i, sensor in enumerate(self.iolinksensors):
-            self.io_link.set_channel(
-                IoLinkChannelConfig(port=i + 1, pd_in=sensor.pd_in_layout),
+            self.io_link.set_port(
+                IoLinkPortConfig(port=i + 1, pd_in=sensor.pd_in_layout),
             )    
 
         self.ai = EL3072(master, self.layout.el3072)
@@ -141,9 +141,9 @@ class Banco:
         #check bus state
         if self.bus.state != State.SAFEOP:
             raise ValueError("Bus is not in safeop mode")
-        for port,sensor in zip(self.io_link.channels, self.iolinksensors):
-            isdu_channel = self.io_link.get_isdu_channel(port.port)
-            sensor.apply_isdu(isdu_channel)
+        for port_cfg, sensor in zip(self.io_link.ports, self.iolinksensors):
+            isdu = self.io_link.isdu_port(port_cfg.port)
+            sensor.apply_isdu(isdu)
 
     def pdo_to_data(self) -> InputDataSnapshot:
         el1004_raw = self.bus.pdoin(self.layout.el1004)
@@ -160,10 +160,10 @@ class Banco:
                 i1=float(ai_named["ch1_COMPACT_REAL32"]["value_f32"]),
                 v2=float(ai_named["ch2_COMPACT_REAL32"]["value_f32"]),
             ),
-            pf2m7=self.iolinksensors[0].sample(**iolink_named["ch1_iolink_pd"]),
-            psd4_1=self.iolinksensors[1].sample(**iolink_named["ch2_iolink_pd"]),
-            psd4_2=self.iolinksensors[2].sample(**iolink_named["ch3_iolink_pd"]),
-            imi54d=self.iolinksensors[3].sample(**iolink_named["ch4_iolink_pd"]),
+            pf2m7=self.iolinksensors[0].sample(**iolink_named["port1_iolink_pd"]),
+            psd4_1=self.iolinksensors[1].sample(**iolink_named["port2_iolink_pd"]),
+            psd4_2=self.iolinksensors[2].sample(**iolink_named["port3_iolink_pd"]),
+            imi54d=self.iolinksensors[3].sample(**iolink_named["port4_iolink_pd"]),
             iolink_port_statuses=self.io_link.iolink_master_state_to_enum(iolink_named["dev_state_ports"]),
             
         )
@@ -225,10 +225,10 @@ class Banco:
 
 
 
-    def read_isdu(self, port: IOLinkIsduChannel, sensor: DeviceBase, name: str) -> bytes:
+    def read_isdu(self, isdu: IoLinkIsduPort, sensor: DeviceBase, name: str) -> bytes:
         reg = sensor.descriptor.registers[name]
         size = bitstruct.calcsize(reg.format) // 8
-        return port.read_isdu(reg.index, reg.subindex, size=size)
+        return isdu.read_isdu(reg.index, reg.subindex, size=size)
 
 
 _console = Console(

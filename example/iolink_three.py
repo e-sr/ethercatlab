@@ -5,7 +5,7 @@ Hardware (stesso banco di ``func.py``):
 
 Workflow
 --------
-1. **PRE-OP** — ``init_stack()``: recipe CoE canali + ``aoe_init``
+1. **PRE-OP** — ``init_iolink_master()``: recipe CoE porte + ``aoe_init``
 2. **SAFE-OP** — ``apply_sensors()``: ISDU write (opz.) → read identità/scaling
 3. **OP** — ``read_sensors()``: PDO ciclico
 
@@ -13,9 +13,9 @@ Run REPL::
 
     pdm run eci enp2s0 --macros example/iolink_three.py --merge-macros-ns
 
-    apply_sensors(bus, iolink, channels)
+    init_and_check_sensors_via_isdu(iolink)
     bus.to_op()
-    read_sensors(bus, iolink, channels)
+    read_sensors(bus, iolink)
 
     # oppure demo completa:
     run_demo(bus, cycles=10, period=1.0)
@@ -35,7 +35,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from ethercat_lab import Master
-from ethercat_lab.el6224 import EL6224, IoLinkChannelConfig
+from ethercat_lab.el6224 import EL6224, IoLinkPortConfig
 from iolink_sensors.imi54d import Imi54dDevice, Imi54dIsduSetup, Imi54dSample
 from iolink_sensors.pf2m7 import Pf2m7Device, Pf2m7IsduSetup, Pf2m7Sample
 from iolink_sensors.psd4 import Psd4Device, Psd4IsduSetup, Psd4Sample
@@ -60,7 +60,7 @@ def init_iolink_master(master: Master) -> EL6224:
         layout = d.pd_in_layout
         if layout is None:
             raise ValueError(f"Port {port}: device has no PD input layout")
-        iolinkmaster.set_channel(IoLinkChannelConfig(port=port, pd_in=layout))
+        iolinkmaster.set_port(IoLinkPortConfig(port=port, pd_in=layout))
     # configura il master
     iolinkmaster.configure_preop(aoe_init=True)
     return iolinkmaster
@@ -70,14 +70,14 @@ def init_and_check_sensors_via_isdu(
     iolinkmaster: EL6224,
 ) -> None:
     for port,d in devices.items():
-        isdu_port = iolinkmaster.get_isdu_channel(port)
+        isdu = iolinkmaster.isdu_port(port)
         try:
-            vendor, product = d.check_identity(isdu_port)
+            vendor, product = d.check_identity(isdu)
         except Exception as e:
             print(f"port {port}: {e}")
         else:
             print(f"port {port}: {vendor} / {product}")
-            d.apply_isdu(isdu_port, verify=False)
+            d.apply_isdu(isdu, verify=False)
 
 def read_sensors(
     master: Master,
@@ -88,7 +88,7 @@ def read_sensors(
     pd = iolinkmaster.decode_tx_pdo_named(master.pdoin(EL6224_SLAVE))
     sample: dict[int, Pf2m7Sample | Psd4Sample | Imi54dSample] = {}
     for port, d in devices.items():
-        field = f"ch{port}_iolink_pd"
+        field = f"port{port}_iolink_pd"
         sample[port] = d.sample(**pd[field])  # type: ignore[call-arg]
     return sample
 

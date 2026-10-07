@@ -5,10 +5,10 @@ from .pdo import PdoMapping, PdoAssignment, TxPdoAssignment, RxPdoAssignment
 from .beckhoff_device import BeckhoffDevice
 from .el6224 import (
     EL6224,
-    IoLinkChannelConfig as EL6224ChannelConfig,
-    IOLinkIsduChannel,
+    IoLinkPortConfig,
+    IoLinkIsduPort,
     PdWireLayout,
-    all_channel_coe_writes,
+    all_port_coe_writes,
     encode_pd_settings_byte,
     decode_pd_settings_byte,
     PortStatusError,
@@ -38,9 +38,9 @@ from .aoe import (
 __all__ = [
     "Master", "CoeTransfer", "PdoMapping", "PdoAssignment", "TxPdoAssignment", "RxPdoAssignment",
     "BeckhoffDevice",
-    "EL6224", "EL6224ChannelConfig", "IOLinkIsduChannel", "PdWireLayout",
+    "EL6224", "IoLinkPortConfig", "IoLinkIsduPort", "PdWireLayout",
     "encode_pd_settings_byte", "decode_pd_settings_byte",
-    "all_channel_coe_writes",
+    "all_port_coe_writes",
     "PortStatusError", "PortStatusFlag", "PortStatusMode",
     "decode_port_status_byte",
     "EL3072", "AnalogInputChannel", "UserScaleConfig", "LimitConfig", "RangeErrorConfig",

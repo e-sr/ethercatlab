@@ -12,7 +12,7 @@ from ethercat_lab.el1xxx import EL1xx4
 from ethercat_lab.el2xxx import EL2xx4
 from iolink_sensors.pd_layout import PdWireLayout
 from ethercat_lab.el6224 import (
-    IoLinkChannelConfig,
+    IoLinkPortConfig,
     decode_pd_settings_byte,
     encode_pd_settings_byte,
 )
@@ -109,12 +109,12 @@ def test_el6224_pd_settings_byte() -> None:
         assert sio == layout.sio
 
 
-def test_el6224_channel_addresses() -> None:
-    ch1 = IoLinkChannelConfig(
+def test_el6224_port_addresses() -> None:
+    ch1 = IoLinkPortConfig(
         1,
         pd_in=PdWireLayout.from_bitstruct("s14b1b1", sio=True),
     )
-    ch2 = IoLinkChannelConfig(
+    ch2 = IoLinkPortConfig(
         2,
         pd_in=PdWireLayout.from_bitstruct("s16b1b1p5b1p6b1b1", sio=False),
     )
@@ -131,7 +131,7 @@ def test_el6224_channel_addresses() -> None:
 
 
 def test_el6224_pdo_map_entry() -> None:
-    ch = IoLinkChannelConfig(3, pd_in=PdWireLayout.from_bitstruct("s14b1b1"))
+    ch = IoLinkPortConfig(3, pd_in=PdWireLayout.from_bitstruct("s14b1b1"))
     entry = ch.pdo_map_entry()
     assert entry.index == 0x6020 and entry.subindex == 1 and entry.length == 16
     assert ch.settings_index == 0x8020
@@ -139,13 +139,13 @@ def test_el6224_pdo_map_entry() -> None:
     assert ch.inputs_index == 0x6020
 
 
-def test_el6224_configure_preop_requires_add_channel() -> None:
+def test_el6224_configure_preop_requires_set_port() -> None:
     import pytest
     from unittest.mock import MagicMock
     from ethercat_lab.el6224 import EL6224
 
     dev = EL6224(MagicMock(), 1)
-    with pytest.raises(ValueError, match="add_channel"):
+    with pytest.raises(ValueError, match="set_port"):
         dev.configure_preop()
 
 
@@ -191,15 +191,15 @@ def test_coe_entry_boolean_sdo_byte() -> None:
     assert entry.pack(False) == b"\x00"
 
 
-def test_el6224_channel_config_from_bytes() -> None:
-    ch = IoLinkChannelConfig.from_bytes(1, pd_in_bytes=2, master_control=3)
+def test_el6224_port_config_from_bytes() -> None:
+    ch = IoLinkPortConfig.from_bytes(1, pd_in_bytes=2, master_control=3)
     by_sub = {(w.index, w.subindex): w.raw for w in ch.settings_writes()}
     assert by_sub[(0x8000, 0x28)] == b"\x03\x00"
     assert ch.pdo_in_byte_len == 2
 
 
 def test_el6224_settings_writes_payload_sizes() -> None:
-    ch = IoLinkChannelConfig(
+    ch = IoLinkPortConfig(
         1,
         pd_in=PdWireLayout.from_frame_type("2.0", direction="in"),
         master_control=3,
@@ -215,12 +215,12 @@ def test_el6224_port_pd_bytes() -> None:
     from unittest.mock import MagicMock
     from ethercat_lab.el6224 import EL6224
 
-    ch1 = IoLinkChannelConfig(1, pd_in=PdWireLayout.from_bitstruct("s14b1b1", sio=True))
-    ch2 = IoLinkChannelConfig(2, pd_in=PdWireLayout.from_frame_type("4.0", direction="in", sio=False))
+    ch1 = IoLinkPortConfig(1, pd_in=PdWireLayout.from_bitstruct("s14b1b1", sio=True))
+    ch2 = IoLinkPortConfig(2, pd_in=PdWireLayout.from_frame_type("4.0", direction="in", sio=False))
     raw = b"\xaa\xbb" + b"\x01\x02\x03\x04"
     dev = EL6224(MagicMock(), 3, include_device_state=False)
-    dev.add_channel(ch1)
-    dev.add_channel(ch2)
+    dev.set_port(ch1)
+    dev.set_port(ch2)
     assert dev.port_pd_bytes(1, raw) == b"\xaa\xbb"
     assert dev.port_pd_bytes(2, raw) == b"\x01\x02\x03\x04"
 
@@ -230,8 +230,8 @@ def test_el6224_device_port_pd_bytes() -> None:
     from ethercat_lab.el6224 import EL6224
 
     dev = EL6224(MagicMock(), 3, include_device_state=False)
-    dev.add_channel(IoLinkChannelConfig(1, pd_in=PdWireLayout.from_bitstruct("s14b1b1", sio=True)))
-    dev.add_channel(IoLinkChannelConfig(2, pd_in=PdWireLayout.from_frame_type("4.0", direction="in", sio=False)))
+    dev.set_port(IoLinkPortConfig(1, pd_in=PdWireLayout.from_bitstruct("s14b1b1", sio=True)))
+    dev.set_port(IoLinkPortConfig(2, pd_in=PdWireLayout.from_frame_type("4.0", direction="in", sio=False)))
     raw = b"\xaa\xbb" + b"\x01\x02\x03\x04"
     assert dev.port_pd_bytes(1, raw) == b"\xaa\xbb"
     assert dev.port_pd_bytes(2, raw) == b"\x01\x02\x03\x04"
@@ -242,7 +242,7 @@ def test_el6224_port_pd_bytes_with_device_state_prefix() -> None:
     from ethercat_lab.el6224 import EL6224, DEVICE_STATE_BYTES
 
     dev = EL6224(MagicMock(), 3, include_device_state=True)
-    dev.add_channel(IoLinkChannelConfig(1, pd_in=PdWireLayout.from_bytes(2)))
+    dev.set_port(IoLinkPortConfig(1, pd_in=PdWireLayout.from_bytes(2)))
     prefix = b"\x00" * DEVICE_STATE_BYTES
     raw = prefix + b"\xaa\xbb"
     assert dev.port_pd_bytes(1, raw) == b"\xaa\xbb"
@@ -279,7 +279,7 @@ def test_iolink_master_state_to_enum() -> None:
 
     dev = EL6224(MagicMock(), 3, include_device_state=True)
     states = dev.iolink_master_state_to_enum({
-        "dev_state_ports": {"state_ch1": 0xA0, "state_ch2": 0x03, "state_ch3": 0x03, "state_ch4": 0x00},
+        "dev_state_ports": {"state_port1": 0xA0, "state_port2": 0x03, "state_port3": 0x03, "state_port4": 0x00},
     })
     assert states[1][0] == PortStatusError.NO_DEVICE
     assert states[2] == (PortStatusError(0), PortStatusMode.COMM_OP, states[2][2])
