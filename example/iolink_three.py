@@ -72,7 +72,7 @@ def init_and_check_sensors_via_isdu(
     for port,d in devices.items():
         isdu = iolinkmaster.isdu_port(port)
         try:
-            vendor, product = d.check_identity(isdu)
+            vendor, product = d.check_port(isdu)
         except Exception as e:
             print(f"port {port}: {e}")
         else:
