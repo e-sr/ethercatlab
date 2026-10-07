@@ -71,8 +71,11 @@ def init_and_check_sensors_via_isdu(
 ) -> None:
     for port,d in devices.items():
         isdu_port = iolinkmaster.get_isdu_channel(port)
-        d.apply_isdu(isdu_port, verify=False)
-        print(f"port {port}: {d.identity}")
+        try:
+            d.apply_isdu(isdu_port, verify=False)
+            print(f"port {port}: {d.identity}")
+        except Exception as e:
+            print(f"port {port}: {e}")
 
 
 def read_sensors(
