@@ -56,7 +56,7 @@ devices: dict[int, Pf2m7Device | Psd4Device | Imi54dDevice] = {
 
 def init_iolink_master(master: Master) -> EL6224:
     iolinkmaster = EL6224(master, EL6224_SLAVE)
-    for port,d in devices.values():
+    for port,d in devices.items():
         layout = d.pd_in_layout
         if layout is None:
             raise ValueError(f"Port {port}: device has no PD input layout")
